@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
+import { createServer as createNetServer } from 'node:net';
 import { AgentRuntime } from '../src/agent/runtime.js';
 import { demoCatalog } from '../src/config.js';
 import { RouteController } from '../src/controller/route-controller.js';
@@ -97,6 +98,48 @@ test('environment can inject a local OpenAI-compatible gateway without JSON conf
   assert.ok(report.summary.executable >= 2);
 });
 
+test('env local OpenAI-compatible gateway can drive the transparent proxy without JSON config', async () => {
+  const upstream = await startOpenAICompatibleProvider();
+  const port = await freePort();
+  let proxy;
+  try {
+    proxy = spawn(process.execPath, ['./bin/proofroute.js', 'proxy', '--port', String(port)], {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        PROOFROUTE_LOCAL_OPENAI_BASE_URL: upstream.url,
+        PROOFROUTE_LOCAL_OPENAI_MODEL: 'studio-proxy'
+      },
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+    await waitForProxy(proxy);
+    const response = await fetch(`http://127.0.0.1:${port}/v1/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'studio-proxy',
+        messages: [{ role: 'user', content: 'Refactor this local gateway path and add a regression test.' }],
+        max_tokens: 8,
+        metadata: {
+          proofroute_policy: 'local'
+        }
+      })
+    });
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('x-proofroute-model'), 'studio-proxy');
+    const payload = await response.json();
+    assert.equal(payload.choices[0].message.content, 'local openai ok');
+    assert.equal(upstream.requests.length, 1);
+    assert.equal(upstream.requests[0].authorization, undefined);
+    assert.equal(upstream.requests[0].body.model, 'studio-proxy');
+  } finally {
+    await stopChild(proxy);
+    await upstream.close();
+  }
+});
+
 function startOpenAICompatibleProvider() {
   const requests = [];
   const server = createServer(async (req, res) => {
@@ -140,4 +183,41 @@ async function readBody(req) {
   const chunks = [];
   for await (const chunk of req) chunks.push(chunk);
   return Buffer.concat(chunks).toString('utf8');
+}
+
+function freePort() {
+  return new Promise((resolve, reject) => {
+    const server = createNetServer();
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address();
+      server.close(() => resolve(address.port));
+    });
+    server.on('error', reject);
+  });
+}
+
+function waitForProxy(child) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('proxy did not become ready')), 2000);
+    child.stdout.on('data', (chunk) => {
+      if (String(chunk).includes('proofroute proxy listening')) {
+        clearTimeout(timer);
+        resolve();
+      }
+    });
+    child.stderr.on('data', (chunk) => {
+      clearTimeout(timer);
+      reject(new Error(String(chunk)));
+    });
+    child.on('exit', (code) => {
+      clearTimeout(timer);
+      reject(new Error(`proxy exited with ${code}`));
+    });
+  });
+}
+
+function stopChild(child) {
+  if (!child || child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
+  child.kill('SIGTERM');
+  return new Promise((resolve) => child.once('exit', resolve));
 }
