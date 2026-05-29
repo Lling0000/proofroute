@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { AgentRuntime } from '../src/agent/runtime.js';
 import { demoCatalog } from '../src/config.js';
@@ -69,6 +70,31 @@ test('local OpenAI-compatible models execute without Ollama adaptation or API ke
   } finally {
     await upstream.close();
   }
+});
+
+test('environment can inject a local OpenAI-compatible gateway without JSON config', () => {
+  const result = spawnSync(process.execPath, ['./bin/proofroute.js', 'models', '--json'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      PROOFROUTE_LOCAL_OPENAI_BASE_URL: 'http://127.0.0.1:65535/v1',
+      PROOFROUTE_LOCAL_OPENAI_MODEL: 'studio-env',
+      PROOFROUTE_LOCAL_OPENAI_CONTEXT_WINDOW: '64000',
+      PROOFROUTE_LOCAL_OPENAI_LATENCY_MS: '90',
+      PROOFROUTE_LOCAL_OPENAI_TOKENS_PER_SECOND: '220'
+    },
+    encoding: 'utf8',
+    timeout: 1000
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const report = JSON.parse(result.stdout);
+  const model = report.models.find((entry) => entry.id === 'studio-env');
+  assert.equal(model.provider, 'localOpenai');
+  assert.equal(model.local, true);
+  assert.equal(model.executable, true);
+  assert.equal(model.contextWindow, 64000);
+  assert.equal(model.medianLatencyMs, 90);
+  assert.ok(report.summary.executable >= 2);
 });
 
 function startOpenAICompatibleProvider() {
