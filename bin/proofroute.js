@@ -162,7 +162,7 @@ try {
 
 async function loadRuntimeConfig(args) {
   const fileConfig = args.config ? await readConfig(resolve(String(args.config))) : {};
-  return resolveEnvReferences(mergeConfig(demoCatalog(), fileConfig, envConfig()));
+  return withEnvironmentModelExtensions(resolveEnvReferences(mergeConfig(demoCatalog(), fileConfig, envConfig())));
 }
 
 function envConfig() {
@@ -183,10 +183,58 @@ function envConfig() {
   if (process.env.OLLAMA_BASE_URL) {
     providers.local = { baseUrl: process.env.OLLAMA_BASE_URL, kind: 'ollama' };
   }
+  if (process.env.PROOFROUTE_LOCAL_OPENAI_BASE_URL) {
+    providers.localOpenai = {
+      baseUrl: process.env.PROOFROUTE_LOCAL_OPENAI_BASE_URL,
+      requiresApiKey: false,
+      healthPath: process.env.PROOFROUTE_LOCAL_OPENAI_HEALTH_PATH ?? '/models',
+      timeoutMs: Number(process.env.PROOFROUTE_LOCAL_OPENAI_TIMEOUT_MS ?? 120000)
+    };
+  }
   if (process.env.PROOFROUTE_TELEMETRY) {
     telemetry.path = process.env.PROOFROUTE_TELEMETRY;
   }
   return { providers, telemetry };
+}
+
+function withEnvironmentModelExtensions(config) {
+  if (!config.providers?.localOpenai?.baseUrl) return config;
+  const models = config.models ?? [];
+  if (models.some((model) => model.provider === 'localOpenai')) return config;
+  return {
+    ...config,
+    models: [
+      ...models,
+      localOpenAIEnvModel()
+    ]
+  };
+}
+
+function localOpenAIEnvModel() {
+  return {
+    id: String(process.env.PROOFROUTE_LOCAL_OPENAI_MODEL ?? 'local-openai'),
+    provider: 'localOpenai',
+    endpoint: String(process.env.PROOFROUTE_LOCAL_OPENAI_ENDPOINT ?? '/chat/completions'),
+    local: true,
+    contextWindow: positiveNumber(process.env.PROOFROUTE_LOCAL_OPENAI_CONTEXT_WINDOW, 131072),
+    inputUsdPer1M: 0,
+    outputUsdPer1M: 0,
+    medianLatencyMs: positiveNumber(process.env.PROOFROUTE_LOCAL_OPENAI_LATENCY_MS, 180),
+    throughputTokensPerSecond: positiveNumber(process.env.PROOFROUTE_LOCAL_OPENAI_TOKENS_PER_SECOND, 150),
+    quality: {
+      code: 0.82,
+      reasoning: 0.76,
+      writing: 0.68,
+      extraction: 0.74,
+      chat: 0.72,
+      long_context: 0.7
+    }
+  };
+}
+
+function positiveNumber(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 function resolveEnvReferences(value) {
