@@ -12,7 +12,7 @@ test('model list exposes only executable OpenAI-compatible model metadata', () =
   assert.equal(list.object, 'list');
   assert.ok(list.data.length > 0);
   assert.ok(list.data.every((model) => model.object === 'model'));
-  assert.ok(list.data.every((model) => model.llm_router.provider === 'local'));
+  assert.ok(list.data.every((model) => model.proofroute.provider === 'local'));
 });
 
 test('readiness reflects executable local and cloud coverage', () => {

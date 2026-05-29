@@ -1,0 +1,43 @@
+{
+  "router": {
+    "softmaxTemperature": 0.82,
+    "latencyPenaltyMs": 700,
+    "costPenaltyUsd": 0.00025,
+    "qualityWeight": 2.1,
+    "localBias": 0.28,
+    "policy": "local",
+    "upstreamTimeoutMs": 120000
+  },
+  "classifier": {
+    "command": "node ./examples/classifier-command.js",
+    "timeoutMs": 1000
+  },
+  "providers": {
+    "lmstudio": {
+      "baseUrl": "http://127.0.0.1:1234/v1",
+      "requiresApiKey": false,
+      "timeoutMs": 120000
+    }
+  },
+  "models": [
+    {
+      "id": "local-qwen-coder",
+      "provider": "lmstudio",
+      "endpoint": "/chat/completions",
+      "local": true,
+      "contextWindow": 131072,
+      "inputUsdPer1M": 0,
+      "outputUsdPer1M": 0,
+      "medianLatencyMs": 180,
+      "throughputTokensPerSecond": 150,
+      "quality": {
+        "code": 0.82,
+        "reasoning": 0.76,
+        "writing": 0.68,
+        "extraction": 0.74,
+        "chat": 0.72,
+        "long_context": 0.7
+      }
+    }
+  ]
+}

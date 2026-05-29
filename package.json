@@ -1,15 +1,19 @@
 {
-  "name": "llm-router",
+  "name": "proofroute",
   "version": "0.1.0",
-  "description": "A CLI-first AVC LLM router that acts as a transparent OpenAI-compatible proxy and proves model-choice savings in the terminal.",
+  "description": "A CLI-first model router that acts as a transparent OpenAI-compatible proxy and proves model-choice savings in the terminal.",
   "type": "module",
   "bin": {
-    "llm-router": "./bin/llm-router.js"
+    "proofroute": "./bin/proofroute.js",
+    "proofroute-classifier": "./bin/proofroute-classifier.js"
   },
   "scripts": {
-    "start": "node ./bin/llm-router.js",
+    "start": "node ./bin/proofroute.js",
+    "prove": "node ./bin/proofroute.js prove",
+    "smoke": "node ./bin/proofroute.js smoke",
+    "smoke:proxy": "node ./bin/proofroute.js smoke --proxy",
     "test": "node --test",
-    "check": "node --check ./bin/llm-router.js && find src test -name '*.js' -print -exec node --check {} \\;"
+    "check": "find bin src test examples -name '*.js' -print -exec node --check {} \\;"
   },
   "keywords": [
     "llm",

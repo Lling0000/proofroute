@@ -2,5 +2,6 @@
 node_modules/
 coverage/
 .env
-.llm-router.json
+.proofroute.json
+.proofroute/
 *.log

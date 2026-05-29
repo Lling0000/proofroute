@@ -11,7 +11,9 @@ export function demoCatalog() {
       latencyPenaltyMs: 900,
       costPenaltyUsd: 0.00035,
       qualityWeight: 2.1,
-      localBias: 0.18
+      localBias: 0.18,
+      cacheSize: 256,
+      upstreamTimeoutMs: 120000
     },
     providers: {
       local: {

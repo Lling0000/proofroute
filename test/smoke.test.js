@@ -1,0 +1,50 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { runSmokeTest } from '../src/agent/smoke.js';
+import { renderHelp, renderSmoke } from '../src/view/terminal.js';
+
+test('smoke test proves local OpenAI-compatible execution loop', async () => {
+  const report = await runSmokeTest();
+  assert.equal(report.status, 'pass');
+  assert.equal(report.response.status, 200);
+  assert.equal(report.upstream.requests.length, 1);
+  assert.equal(report.upstream.requests[0].model, report.decision.model.id);
+  assert.equal(report.upstream.requests[0].authorization, 'Bearer smoke-key');
+  assert.match(report.response.content, /smoke ok/);
+  assert.ok(report.routerDecisionMs > 0);
+  assert.ok(report.executionMs > 0);
+  assert.ok(report.decision.economics.savingsUsd > 0);
+  const output = renderSmoke(report);
+  assert.match(output, /PROXY SMOKE/);
+  assert.match(output, /PASS/);
+  assert.match(output, /auth header/);
+  assert.match(renderHelp(), /proofroute smoke/);
+});
+
+test('smoke test can prove the full transparent proxy entrypoint', async () => {
+  const report = await runSmokeTest({ throughProxy: true });
+  assert.equal(report.status, 'pass');
+  assert.equal(report.mode, 'proxy');
+  assert.equal(report.response.status, 200);
+  assert.equal(report.upstream.requests.length, 1);
+  assert.equal(report.upstream.requests[0].model, report.decision.model.id);
+  assert.equal(report.upstream.requests[0].authorization, 'Bearer smoke-key');
+  assert.equal(report.response.headers.model, report.decision.model.id);
+  assert.equal(report.response.headers.intent, report.decision.intent.name);
+  assert.equal(report.response.headers.actualTokens, '13');
+  assert.equal(report.response.headers.actualCostUsd, '0.000002');
+  assert.equal(report.cors.status, 204);
+  assert.match(report.cors.allowHeaders, /x-proofroute-policy/);
+  assert.match(report.cors.exposeHeaders, /x-proofroute-model/);
+  assert.match(report.cors.exposeHeaders, /x-proofroute-actual-tokens/);
+  assert.match(report.proxy.origin, /^http:\/\/127\.0\.0\.1:/);
+  assert.match(report.response.content, /smoke ok/);
+  assert.ok(report.routerDecisionMs > 0);
+  assert.ok(report.executionMs > 0);
+  const output = renderSmoke(report);
+  assert.match(output, /transparent/);
+  assert.match(output, /browser proof/);
+  assert.match(output, /proxy cache/);
+  assert.match(output, /actual tokens/);
+  assert.match(renderHelp(), /proofroute smoke --proxy/);
+});
