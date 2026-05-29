@@ -1,0 +1,27 @@
+[
+  {
+    "id": "code-fix",
+    "intent": "code",
+    "prompt": "Refactor this TypeScript webhook, fix the stacktrace, and add a regression test."
+  },
+  {
+    "id": "long-audit",
+    "intent": "long_context",
+    "prompt": "Audit this repository migration plan, compare every risk, and summarize the cross-file action items."
+  },
+  {
+    "id": "extract-json",
+    "intent": "extraction",
+    "prompt": "Extract the customer ids, invoice totals, and renewal dates into strict JSON."
+  },
+  {
+    "id": "launch-copy",
+    "intent": "writing",
+    "prompt": "Rewrite this README introduction so the launch feels credible, sharp, and easy to share."
+  },
+  {
+    "id": "tradeoff",
+    "intent": "reasoning",
+    "prompt": "Compare these routing algorithms and explain the cost, latency, and quality tradeoffs."
+  }
+]

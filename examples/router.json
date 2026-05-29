@@ -1,0 +1,59 @@
+{
+  "router": {
+    "softmaxTemperature": 0.82,
+    "latencyPenaltyMs": 900,
+    "costPenaltyUsd": 0.00035,
+    "qualityWeight": 2.1,
+    "localBias": 0.18
+  },
+  "providers": {
+    "local": {
+      "baseUrl": "http://127.0.0.1:11434",
+      "kind": "ollama"
+    },
+    "openai": {
+      "baseUrl": "https://api.openai.com/v1",
+      "apiKey": "env:OPENAI_API_KEY"
+    }
+  },
+  "models": [
+    {
+      "id": "llama3.2:3b",
+      "provider": "local",
+      "endpoint": "/api/chat",
+      "local": true,
+      "contextWindow": 128000,
+      "inputUsdPer1M": 0,
+      "outputUsdPer1M": 0,
+      "medianLatencyMs": 240,
+      "throughputTokensPerSecond": 92,
+      "quality": {
+        "code": 0.62,
+        "reasoning": 0.48,
+        "writing": 0.56,
+        "extraction": 0.58,
+        "chat": 0.64,
+        "long_context": 0.44
+      }
+    },
+    {
+      "id": "gpt-4.1-mini",
+      "provider": "openai",
+      "endpoint": "/chat/completions",
+      "local": false,
+      "contextWindow": 1047576,
+      "inputUsdPer1M": 0.4,
+      "outputUsdPer1M": 1.6,
+      "medianLatencyMs": 820,
+      "throughputTokensPerSecond": 138,
+      "quality": {
+        "code": 0.78,
+        "reasoning": 0.72,
+        "writing": 0.74,
+        "extraction": 0.76,
+        "chat": 0.75,
+        "long_context": 0.76
+      }
+    }
+  ]
+}
