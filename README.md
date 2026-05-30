@@ -1,5 +1,7 @@
 # ProofRoute
 
+[English](README.md) | [简体中文](README.zh-CN.md)
+
 > Route every OpenAI-shaped request to the cheapest fast-enough model, prove the decision in your terminal, and keep prompt text on your machine.
 
 [![Node.js >=20](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)](package.json)
