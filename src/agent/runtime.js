@@ -1,3 +1,5 @@
+import { ROUTING_POLICIES } from '../controller/route-controller.js';
+
 export class AgentRuntime {
   constructor(config) {
     this.config = config;
@@ -197,6 +199,8 @@ export class AgentRuntime {
         confidence: decision.confidence,
         savingsUsd: decision.economics.savingsUsd,
         speedup: decision.performance.speedup,
+        estimatedLatencyMs: decision.performance.estimatedLatencyMs,
+        routerOverheadPct: routerOverheadPercent(routeLatencyMs, decision.performance.estimatedLatencyMs),
         latencyMs: routeLatencyMs
       });
     }
@@ -212,6 +216,7 @@ export class AgentRuntime {
         savingsUsd: rows.reduce((total, row) => total + row.savingsUsd, 0),
         averageSpeedup: average(rows.map((row) => row.speedup)),
         p95RouterMs: percentile(latencies, 0.95),
+        p95RouterOverheadPct: percentile(rows.map((row) => row.routerOverheadPct), 0.95),
         intents: countBy(rows.map((row) => row.actualIntent)),
         models: countBy(rows.map((row) => row.model))
       }
@@ -227,6 +232,7 @@ export class AgentRuntime {
     for (let index = 0; index < samples.length; index += 1) {
       const sample = samples[index];
       const decision = decisions[index];
+      const classifierFeatures = decision.intent.features ?? {};
       routes.push({
         id: sample.id,
         prompt: sample.prompt,
@@ -236,6 +242,9 @@ export class AgentRuntime {
         model: decision.model.id,
         provider: decision.model.provider,
         local: Boolean(decision.model.local),
+        policy: decision.policy,
+        classifierBackend: classifierFeatures.backend ?? 'unknown',
+        classifierCircuitOpen: Boolean(classifierFeatures.classifierCircuitOpen),
         confidence: decision.confidence,
         inputTokens: decision.inputTokens,
         outputTokens: decision.outputTokens,
@@ -244,6 +253,8 @@ export class AgentRuntime {
         savingsUsd: decision.economics.savingsUsd,
         savingsPct: decision.economics.savingsPct,
         speedup: decision.performance.speedup,
+        estimatedLatencyMs: decision.performance.estimatedLatencyMs,
+        routerOverheadPct: routerOverheadPercent(routeLatencyMs, decision.performance.estimatedLatencyMs),
         latencyMs: routeLatencyMs
       });
     }
@@ -264,9 +275,13 @@ export class AgentRuntime {
         estimatedCostUsd: routes.reduce((total, row) => total + row.estimatedCostUsd, 0),
         baselineCostUsd: totalBaselineCostUsd,
         averageSpeedup: average(routes.map((row) => row.speedup)),
+        p95RouterOverheadPct: percentile(routes.map((row) => row.routerOverheadPct), 0.95),
         localRoutes: routes.filter((row) => row.local).length,
         cloudRoutes: routes.filter((row) => !row.local).length,
         intents: countBy(routes.map((row) => row.actualIntent)),
+        policies: countBy(routes.map((row) => row.policy)),
+        classifierBackends: countBy(routes.map((row) => row.classifierBackend ?? 'unknown')),
+        classifierCircuitOpen: routes.filter((row) => row.classifierCircuitOpen).length,
         models: countBy(routes.map((row) => row.model)),
         providers: countBy(routes.map((row) => row.provider))
       }
@@ -284,6 +299,12 @@ export class AgentRuntime {
     };
     const wantsAccuracy = source === 'demo' || thresholds.minAccuracy !== undefined;
     if (wantsAccuracy) resolved.minAccuracy = normalizeThreshold(thresholds.minAccuracy, 0.8);
+    if (thresholds.maxClassifierCircuitOpen !== undefined) {
+      resolved.maxClassifierCircuitOpen = normalizeThreshold(thresholds.maxClassifierCircuitOpen, 0);
+    }
+    if (thresholds.maxRouterOverheadPct !== undefined) {
+      resolved.maxRouterOverheadPct = normalizeThreshold(thresholds.maxRouterOverheadPct, 1);
+    }
     const checks = [
       proofCheck({ id: 'requests', label: 'requests', value: aggregate.count, target: resolved.minRequests, direction: 'min', unit: 'count' }),
       proofCheck({ id: 'router_p95', label: 'router p95', value: aggregate.p95RouterMs, target: resolved.maxP95Ms, direction: 'max', unit: 'ms' }),
@@ -291,6 +312,12 @@ export class AgentRuntime {
       proofCheck({ id: 'speedup', label: 'speed lift', value: aggregate.averageSpeedup, target: resolved.minSpeedup, direction: 'min', unit: 'x' })
     ];
     if (wantsAccuracy) checks.push(proofCheck({ id: 'accuracy', label: 'intent accuracy', value: aggregate.accuracy ?? 0, target: resolved.minAccuracy, direction: 'min', unit: 'ratio' }));
+    if (resolved.maxClassifierCircuitOpen !== undefined) {
+      checks.push(proofCheck({ id: 'classifier_circuit', label: 'classifier guard', value: aggregate.classifierCircuitOpen, target: resolved.maxClassifierCircuitOpen, direction: 'max', unit: 'count' }));
+    }
+    if (resolved.maxRouterOverheadPct !== undefined) {
+      checks.push(proofCheck({ id: 'router_overhead', label: 'router overhead', value: aggregate.p95RouterOverheadPct, target: resolved.maxRouterOverheadPct, direction: 'max', unit: 'percent' }));
+    }
     return {
       status: checks.every((check) => check.pass) ? 'pass' : 'fail',
       source: summary ? source : 'demo',
@@ -415,22 +442,48 @@ export class AgentRuntime {
 
   modelList({ controller }) {
     const created = Math.floor(Date.now() / 1000);
+    const policyAliases = ['auto', ...ROUTING_POLICIES].map((policy) => ({
+      id: `proofroute/${policy}`,
+      object: 'model',
+      created,
+      owned_by: 'proofroute',
+      proofroute: {
+        virtual: true,
+        policy: policy === 'auto' ? 'balanced' : policy,
+        description: policyDescription(policy),
+        controls: {
+          model_alias: `proofroute/${policy}`,
+          header: 'x-proofroute-policy',
+          metadata: 'proofroute_policy',
+          max_cost_header: 'x-proofroute-max-cost-usd',
+          max_latency_header: 'x-proofroute-max-latency-ms'
+        },
+        transparent_proxy: true
+      }
+    }));
     return {
       object: 'list',
-      data: controller.executableModels().map((model) => ({
-        id: model.id,
-        object: 'model',
-        created,
-        owned_by: model.provider,
-        proofroute: {
-          provider: model.provider,
-          local: Boolean(model.local),
-          context_window: model.contextWindow,
-          input_usd_per_1m: model.inputUsdPer1M,
-          output_usd_per_1m: model.outputUsdPer1M,
-          median_latency_ms: model.medianLatencyMs
-        }
-      }))
+      data: [
+        ...policyAliases,
+        ...controller.executableModels().map((model) => ({
+          id: model.id,
+          object: 'model',
+          created,
+          owned_by: model.provider,
+          proofroute: {
+            virtual: false,
+            executable: true,
+            provider: model.provider,
+            local: Boolean(model.local),
+            context_window: model.contextWindow,
+            input_usd_per_1m: model.inputUsdPer1M,
+            output_usd_per_1m: model.outputUsdPer1M,
+            median_latency_ms: model.medianLatencyMs,
+            throughput_tokens_per_second: model.throughputTokensPerSecond,
+            best_intent: bestModelIntent(model)
+          }
+        }))
+      ]
     };
   }
 
@@ -1147,18 +1200,42 @@ function normalizeProofAggregate(aggregate) {
     ...aggregate,
     count: proofNumber(aggregate.count),
     p95RouterMs: proofNumber(aggregate.p95RouterMs),
+    p95RouterOverheadPct: proofNumber(aggregate.p95RouterOverheadPct),
     savingsUsd,
     savingsPct: Number.isFinite(Number(aggregate.savingsPct)) ? Number(aggregate.savingsPct) : derivedSavingsPct,
     estimatedCostUsd,
     actualCostUsd,
     averageSpeedup: proofNumber(aggregate.averageSpeedup),
-    accuracy: Number.isFinite(Number(aggregate.accuracy)) ? Number(aggregate.accuracy) : undefined
+    accuracy: Number.isFinite(Number(aggregate.accuracy)) ? Number(aggregate.accuracy) : undefined,
+    classifierCircuitOpen: proofNumber(aggregate.classifierCircuitOpen)
   };
 }
 
 function proofNumber(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function routerOverheadPercent(routerDecisionMs, estimatedLatencyMs) {
+  const latency = Number(estimatedLatencyMs);
+  return Number.isFinite(latency) && latency > 0 ? routerDecisionMs / latency * 100 : 0;
+}
+
+function policyDescription(policy) {
+  const normalized = policy === 'auto' ? 'balanced' : policy;
+  const descriptions = {
+    balanced: 'Route to the best blend of quality, latency, and cost.',
+    save: 'Increase cost pressure so cheaper fast-enough models win more often.',
+    fast: 'Increase latency pressure so low-latency models win more often.',
+    quality: 'Increase quality pressure so stronger models win when the task deserves them.',
+    local: 'Prefer executable local models whenever they are a safe fit.'
+  };
+  return descriptions[normalized] ?? descriptions.balanced;
+}
+
+function bestModelIntent(model) {
+  const best = bestEntry(defaultIntents().map((intent) => [intent, model.quality?.[intent] ?? model.quality?.chat ?? 0]), ([, value]) => value);
+  return best?.[0] ?? 'chat';
 }
 
 function countBy(values) {

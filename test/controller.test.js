@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { demoCatalog } from '../src/config.js';
 import { classifyIntent, stableSoftmax } from '../src/controller/intent.js';
 import { NoRouteError, RouteController } from '../src/controller/route-controller.js';
-import { renderRouteTrace } from '../src/view/terminal.js';
+import { renderDecision, renderRouteTrace } from '../src/view/terminal.js';
 
 test('stableSoftmax remains finite for extreme logits', () => {
   const probabilities = stableSoftmax([10000, 9999, -10000], 0.1);
@@ -36,6 +36,9 @@ test('route controller returns a complete economic decision', () => {
   assert.equal(typeof decision.ranked[0].components.quality, 'number');
   assert.equal(typeof decision.ranked[0].components.cost, 'number');
   assert.equal(typeof decision.ranked[0].components.latency, 'number');
+  const output = renderDecision(decision);
+  assert.match(output, /balanced/);
+  assert.match(output, /policy/);
 });
 
 test('route trace renders scoring contributions for the winning model', () => {
@@ -45,6 +48,7 @@ test('route trace renders scoring contributions for the winning model', () => {
   assert.match(output, /ROUTING TRACE/);
   assert.match(output, /quality/);
   assert.match(output, /latency/);
+  assert.match(output, /balanced/);
 });
 
 test('route controller records models rejected by context window gates', () => {

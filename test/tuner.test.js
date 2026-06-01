@@ -32,6 +32,45 @@ test('tuner recommends save policy for cloud-heavy low-savings traffic', () => {
   assert.match(renderTune({ path: 'events.jsonl', ...report }), /balanced -> save/);
 });
 
+test('tuner recommends classifier guard patch when accelerator fallback opens', () => {
+  const events = Array.from({ length: 6 }, (_, index) => ({
+    model: 'local-router',
+    provider: 'local',
+    local: true,
+    intent: 'code',
+    savingsUsd: 0.001,
+    estimatedCostUsd: 0,
+    speedup: 1.4,
+    routerLatencyMs: 0.9,
+    endToEndMs: 80,
+    estimatedLatencyMs: 70,
+    classifierBackend: index < 2 ? 'builtin-circuit-open' : 'external-url',
+    classifierCircuitOpen: index < 2,
+    stream: false,
+    status: 200
+  }));
+  const config = {
+    router: { policy: 'balanced' },
+    classifier: {
+      timeoutMs: 12,
+      cooldownMs: 1000,
+      failureThreshold: 3
+    }
+  };
+  const report = tuneFromEvents(events, config);
+  assert.equal(report.summary.classifierCircuitOpen, 2);
+  assert.equal(report.classifierPatch.timeoutMs, 9);
+  assert.equal(report.classifierPatch.cooldownMs, 2000);
+  assert.equal(report.classifierPatch.failureThreshold, 3);
+  const output = renderTune({ path: 'events.jsonl', ...report });
+  assert.match(output, /classifier patch/);
+  assert.match(output, /protected classifier fallback circuit/);
+  const tuned = exportTunedConfig(config, report);
+  assert.equal(tuned.classifier.timeoutMs, 9);
+  assert.equal(tuned.classifier.cooldownMs, 2000);
+  assert.equal(tuned.classifier.failureThreshold, 3);
+});
+
 test('tuner export merges router patch without telemetry-only metadata', () => {
   const config = {
     router: {
@@ -52,5 +91,6 @@ test('tuner export merges router patch without telemetry-only metadata', () => {
   assert.equal(tuned.router.costPenaltyUsd, 0.00028);
   assert.equal(tuned.router.qualityWeight, 2.1);
   assert.equal(tuned.router.streamingObserved, undefined);
+  assert.equal(tuned.classifier, undefined);
   assert.equal(tuned.models[0].id, 'keep-me');
 });

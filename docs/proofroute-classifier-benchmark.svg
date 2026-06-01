@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720" role="img" aria-labelledby="title desc">
+<title id="title">ProofRoute classifier benchmark proof</title>
+<desc id="desc">ProofRoute classifier benchmark artifact preview passed with 0.42ms p95 decision latency, 1577.9 prompts per second, and hardware claim none.</desc>
+<rect width="1200" height="720" rx="32" fill="#070a12"/>
+<rect x="34" y="34" width="1132" height="652" rx="28" fill="#0e1422" stroke="#263244" stroke-width="2"/>
+<rect x="64" y="64" width="1072" height="96" rx="20" fill="#111827"/>
+<text x="94" y="112" fill="#f8fafc" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="42" font-weight="800" letter-spacing="0">ProofRoute Classifier</text>
+<text x="94" y="144" fill="#8bd3ff" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" letter-spacing="0">sidecar benchmark receipt</text>
+<text x="930" y="105" fill="#22c55e" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" text-anchor="end" font-weight="800" letter-spacing="0">PASS</text>
+<text x="930" y="134" fill="#eab308" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" text-anchor="end" letter-spacing="0">hardware claim none</text>
+<rect x="74" y="200" width="220" height="96" rx="18" fill="#0b1020" stroke="#263244" stroke-width="1"/>
+<text x="98" y="236" fill="#94a3b8" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15" letter-spacing="0">p95 decision</text>
+<text x="98" y="272" fill="#eab308" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="25" font-weight="800" letter-spacing="0">0.42ms</text>
+<rect x="330" y="200" width="220" height="96" rx="18" fill="#0b1020" stroke="#263244" stroke-width="1"/>
+<text x="354" y="236" fill="#94a3b8" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15" letter-spacing="0">throughput</text>
+<text x="354" y="272" fill="#d946ef" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="25" font-weight="800" letter-spacing="0">1577.9/s</text>
+<rect x="586" y="200" width="220" height="96" rx="18" fill="#0b1020" stroke="#263244" stroke-width="1"/>
+<text x="610" y="236" fill="#94a3b8" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15" letter-spacing="0">accuracy</text>
+<text x="610" y="272" fill="#38bdf8" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="25" font-weight="800" letter-spacing="0">100.0%</text>
+<rect x="842" y="200" width="220" height="96" rx="18" fill="#0b1020" stroke="#263244" stroke-width="1"/>
+<text x="866" y="236" fill="#94a3b8" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15" letter-spacing="0">avg batch</text>
+<text x="866" y="272" fill="#22c55e" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="25" font-weight="800" letter-spacing="0">1.00</text>
+<text x="74" y="352" fill="#cbd5e1" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" letter-spacing="0">p95 decision</text>
+<rect x="238" y="334" width="810" height="22" rx="11" fill="#1f2937"/>
+<rect x="238" y="334" width="725" height="22" rx="11" fill="#eab308"/>
+<text x="1074" y="352" fill="#f8fafc" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" text-anchor="end" letter-spacing="0">0.42ms</text>
+<text x="74" y="414" fill="#cbd5e1" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" letter-spacing="0">throughput</text>
+<rect x="238" y="396" width="810" height="22" rx="11" fill="#1f2937"/>
+<rect x="238" y="396" width="256" height="22" rx="11" fill="#d946ef"/>
+<text x="1074" y="414" fill="#f8fafc" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" text-anchor="end" letter-spacing="0">1577.9/s</text>
+<text x="74" y="476" fill="#cbd5e1" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" letter-spacing="0">labeled accuracy</text>
+<rect x="238" y="458" width="810" height="22" rx="11" fill="#1f2937"/>
+<rect x="238" y="458" width="810" height="22" rx="11" fill="#38bdf8"/>
+<text x="1074" y="476" fill="#f8fafc" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" text-anchor="end" letter-spacing="0">100.0%</text>
+<text x="74" y="538" fill="#cbd5e1" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" letter-spacing="0">average batch</text>
+<rect x="238" y="520" width="810" height="22" rx="11" fill="#1f2937"/>
+<rect x="238" y="520" width="51" height="22" rx="11" fill="#22c55e"/>
+<text x="1074" y="538" fill="#f8fafc" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" text-anchor="end" letter-spacing="0">1.00</text>
+<rect x="74" y="594" width="1052" height="58" rx="16" fill="#0b1020" stroke="#263244" stroke-width="1"/>
+<text x="98" y="620" fill="#94a3b8" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15" letter-spacing="0">backend mix external-url:5   lane mix 0:2, 1:3</text>
+<text x="98" y="644" fill="#cbd5e1" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15" letter-spacing="0">batch mix single:5   lanes 2   declared profiles 2   hardware probe profiles 0</text>
+<text x="74" y="684" fill="#f8fafc" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17" letter-spacing="0">ProofRoute classifier artifact preview passed: 0.42ms p95, 1577.9 prompts/s, 2 lanes; hardware claim none.</text>
+</svg>

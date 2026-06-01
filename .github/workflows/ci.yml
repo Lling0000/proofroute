@@ -1,0 +1,63 @@
+name: ProofRoute CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  node:
+    name: Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node:
+          - 20
+          - 22
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Run tests
+        run: npm test
+
+      - name: Check syntax
+        run: npm run check
+
+      - name: Check shell launchers
+        run: npm run check:shell
+
+      - name: Check prose style
+        run: npm run check:prose
+
+      - name: Check npm package surface
+        run: |
+          npm run --silent release:npm:dry-run > "$RUNNER_TEMP/npm-pack.json"
+          node -e 'const fs = require("node:fs"); const report = JSON.parse(fs.readFileSync(process.argv[1], "utf8"))[0]; const files = new Set(report.files.map((file) => file.path)); for (const required of ["bin/proofroute.js", "bin/proofroute-classifier.js", "src/agent/classifier-evidence.js", "src/agent/launch-readiness.js", "src/agent/release-pack.js", "src/agent/repository-profile.js", "scripts/check-prose-docs.js", "docs/repository-profile.md", "docs/proofroute-terminal.svg", "docs/proofroute-classifier.svg", "docs/proofroute-classifier-benchmark.svg", "README.md", "CONTRIBUTING.md", "SECURITY.md", "LICENSE", ".env.example"]) { if (!files.has(required)) throw new Error(`npm pack is missing ${required}`); } if (report.name !== "proofroute") throw new Error("wrong npm package name"); if (!report.version) throw new Error("missing npm package version");' "$RUNNER_TEMP/npm-pack.json"
+
+      - name: Build local release proof pack
+        run: |
+          npm run --silent release:pack:local -- --out "$RUNNER_TEMP/proofroute-release-pack" --telemetry "$RUNNER_TEMP/proofroute-events.jsonl" > "$RUNNER_TEMP/release-pack-report.json"
+          node -e 'const fs = require("node:fs"); const report = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); if (report.kind !== "proofroute-release-proof-pack-v1") throw new Error("wrong release pack report kind"); if (report.status === "fail") throw new Error("release pack failed"); if (report.launch.github !== undefined) throw new Error("CI release pack must not run --check-github"); if (report.launch.evidence.status !== "not_claimed") throw new Error("CI release pack must stay in core no-accelerator-claim mode"); if (!report.git || report.git.available !== true) throw new Error("git provenance missing from release pack");' "$RUNNER_TEMP/release-pack-report.json"
+          test -s "$RUNNER_TEMP/proofroute-release-pack/repository-profile.json"
+          test -s "$RUNNER_TEMP/proofroute-release-pack/launch-readiness.json"
+          test -s "$RUNNER_TEMP/proofroute-release-pack/git-provenance.json"
+          test -s "$RUNNER_TEMP/proofroute-release-pack/proofroute-release.md"
+          test -s "$RUNNER_TEMP/proofroute-release-pack/launch-copy.md"
+          test -s "$RUNNER_TEMP/proofroute-release-pack/assets/proofroute-terminal.svg"
+
+      - name: Check diff whitespace
+        run: git diff --check HEAD^ HEAD

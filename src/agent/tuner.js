@@ -9,23 +9,31 @@ export function tuneFromEvents(events, config = {}) {
   const cloudRatio = summary.count ? summary.cloud / summary.count : 0;
   const recommendedPolicy = recommendPolicy({ summary, currentPolicy, localRatio, savingsPerRequest, cloudRatio });
   const routerPatch = recommendRouterPatch({ summary, recommendedPolicy, localRatio, streamRatio, savingsPerRequest, config });
+  const classifierPatch = recommendClassifierPatch({ summary, config });
   return {
     currentPolicy,
     recommendedPolicy,
     confidence: confidence(summary),
     summary,
     routerPatch,
+    classifierPatch,
     reasons: reasons({ summary, currentPolicy, recommendedPolicy, localRatio, streamRatio, savingsPerRequest, cloudRatio })
   };
 }
 
 export function exportTunedConfig(config, tune) {
+  const classifierPatch = tune.classifierPatch ?? {};
+  const classifier = Object.keys(classifierPatch).length > 0 ? {
+    ...(config.classifier ?? {}),
+    ...classifierPatch
+  } : config.classifier;
   return {
     ...config,
     router: {
       ...(config.router ?? {}),
       ...withoutMeta(tune.routerPatch ?? {})
-    }
+    },
+    ...(classifier ? { classifier } : {})
   };
 }
 
@@ -57,6 +65,16 @@ function recommendRouterPatch({ summary, recommendedPolicy, localRatio, streamRa
   return patch;
 }
 
+function recommendClassifierPatch({ summary, config }) {
+  if (!summary.classifierCircuitOpen) return {};
+  const current = config.classifier ?? {};
+  return {
+    timeoutMs: Math.max(4, Math.round((current.timeoutMs ?? 12) * 0.75)),
+    cooldownMs: Math.max(2000, Math.round((current.cooldownMs ?? 1000) * 1.5)),
+    failureThreshold: Math.max(1, Math.floor(current.failureThreshold ?? 3))
+  };
+}
+
 function confidence(summary) {
   if (summary.count >= 100) return 0.92;
   if (summary.count >= 25) return 0.78;
@@ -80,6 +98,7 @@ function reasons({ summary, currentPolicy, recommendedPolicy, localRatio, stream
   }
   if (savingsPerRequest < 0.0002) output.push('Savings per request are low, so cost pressure can be increased without hiding the decision behind a hard rule.');
   if (summary.p95RouterMs > 5) output.push('Decision latency is above the intended near-zero path, so latency pressure should rise before adding heavier classifier work.');
+  if (summary.classifierCircuitOpen > 0) output.push(`${summary.classifierCircuitOpen} routes used the protected classifier fallback circuit, so the accelerator timeout should shrink and the cooldown should lengthen before its throughput claim is trusted.`);
   return output;
 }
 

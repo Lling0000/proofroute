@@ -119,16 +119,14 @@ test('env local OpenAI-compatible gateway can drive the transparent proxy withou
         'content-type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'studio-proxy',
+        model: 'proofroute/local',
         messages: [{ role: 'user', content: 'Refactor this local gateway path and add a regression test.' }],
-        max_tokens: 8,
-        metadata: {
-          proofroute_policy: 'local'
-        }
+        max_tokens: 8
       })
     });
     assert.equal(response.status, 200);
     assert.equal(response.headers.get('x-proofroute-model'), 'studio-proxy');
+    assert.equal(response.headers.get('x-proofroute-policy'), 'local');
     const payload = await response.json();
     assert.equal(payload.choices[0].message.content, 'local openai ok');
     assert.equal(upstream.requests.length, 1);

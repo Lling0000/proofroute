@@ -2,273 +2,124 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-> Route every OpenAI-shaped request to the cheapest fast-enough model, prove the decision in your terminal, and keep prompt text on your machine.
+[![CI](https://github.com/Lling0000/proofroute/actions/workflows/ci.yml/badge.svg)](https://github.com/Lling0000/proofroute/actions/workflows/ci.yml) [![GitHub](https://img.shields.io/badge/github-Lling0000%2Fproofroute-181717?logo=github)](https://github.com/Lling0000/proofroute) [![License](https://img.shields.io/badge/license-MIT-2ea44f)](LICENSE) [![Node](https://img.shields.io/badge/node-%3E%3D20-339933?logo=nodedotjs)](package.json) [![Dependencies](https://img.shields.io/badge/runtime%20dependencies-zero-0ea5e9)](package.json) [![Proxy](https://img.shields.io/badge/OpenAI-compatible%20proxy-111827)](#proofroute) [![Architecture](https://img.shields.io/badge/architecture-Agent--View--Controller-7c3aed)](docs/architecture.md)
 
-[![Node.js >=20](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)](package.json)
-[![MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![Zero runtime deps](https://img.shields.io/badge/runtime_deps-0-111111)](package.json)
-[![OpenAI compatible proxy](https://img.shields.io/badge/proxy-OpenAI--compatible-412991)](#drop-in-openai-proxy)
-[![Local telemetry](https://img.shields.io/badge/telemetry-local_JSONL-0f766e)](#privacy-model)
+ProofRoute is the invisible LLM router for Vibe Coding: a CLI-first, zero-dependency, OpenAI-compatible router and proxy that routes each prompt to the cheapest fast-enough local or cloud model before your coding agent notices there was ever a choice, then proves speed, savings, and prompt-free privacy in the terminal.
 
-ProofRoute is a CLI-first model router for developers who would rather ship than stare at model menus. It runs as a transparent OpenAI-compatible proxy, classifies each prompt locally, estimates context, latency, and cost, then routes to the model with the best quality/price/speed tradeoff.
+It is built for developers who do not want to pause their flow to choose a model. It runs as a transparent OpenAI-compatible proxy, inspects each prompt locally, predicts the task intent, estimates the context and output budget, and routes the request toward the model that gives the best blend of quality, latency, and price. The project is intentionally headless because the highest-leverage interface for a tool like this is the shell, the editor task runner, the CI log, and the invisible network hop between an agentic coding tool and its model provider.
 
-The first run is deliberately boring in the best possible way: no dashboard, no account, no hosted telemetry, no runtime dependencies. Just a terminal receipt that says which model won and why.
+![ProofRoute terminal proof](docs/proofroute-terminal.svg)
 
-```sh
-node ./bin/proofroute.js share --markdown
-```
+The architecture follows an Agent-View-Controller shape that keeps each decision boundary sharp. The Controller owns local intent recognition, token estimation, context fit checks, cost modeling, latency modeling, and numerically stable Softmax ranking. The Agent owns asynchronous provider execution, OpenAI-compatible forwarding, Ollama adaptation, and benchmark orchestration. The View owns terminal-native proof, including dense ANSI charts that show the chosen model, confidence, speedup, and precise dollar savings without requiring a dashboard, browser, or hosted account.
 
-```text
-proofroute routed 5 prompts before any provider call, with 0.31ms p95 decision time, $0.019173 estimated savings, 1.64x estimated speedup, and 100.0% labeled intent accuracy.
+The default path is deliberately zero configuration. A developer can clone the repository, run the launch demo, and see a shareable proof card before any network call happens. A single prompt still produces an immediate route decision, and when the proxy is started, existing OpenAI-compatible clients can point their base URL at proofroute and keep using the same chat completion endpoint while the router silently swaps in the best configured local or cloud model. This makes the tool fit naturally into Vibe Coding sessions because it behaves like infrastructure that has taste: quiet during the work, loud only when it has evidence worth sharing.
 
-Copy line: I routed 5 prompts with proofroute in 0.31ms p95 decision time, saved $0.019173, and got 1.64x estimated speedup before any provider call.
-```
+## Quick Start
 
-## Why Developers Star It
-
-- **Drop-in proxy**: point OpenAI-compatible SDKs, agents, editor extensions, and CLI tools at `http://127.0.0.1:8787/v1`.
-- **Terminal proof**: every route can show intent, selected model, alternatives, cost delta, speed delta, p95 decision time, and CI gates.
-- **Private by default**: the proxy ledger stores routing evidence, timing, status, token counts, and savings, not prompt or completion text.
-- **Local plus cloud**: route across Ollama, OpenAI-compatible local gateways such as LM Studio/vLLM, OpenAI-shaped cloud providers, and configured fallback models.
-- **No dependency maze**: the package uses modern Node.js for the CLI, HTTP server, fetch client, tests, and performance timers.
-- **Built to tune**: run real traffic, inspect the local JSONL ledger, and export a reviewed routing-policy patch instead of accepting a black box.
-
-## 30-Second Quick Start
+The fastest first run is the demo because it turns curiosity into a local receipt before a developer has to configure a provider. It needs no API key, makes no network call, and immediately shows the routing decision, p95 controller latency, estimated savings, speed lift, and route mix that define the product.
 
 ```sh
-git clone <your-fork-or-checkout-url>
-cd proofroute
-node --version # requires Node.js >=20
-
-# Zero-network launch proof.
 node ./bin/proofroute.js demo
-node ./bin/proofroute.js share --markdown
-
-# CI-shaped gate for the public claim.
-node ./bin/proofroute.js prove --max-p95-ms 5 --min-accuracy 0.8
 ```
 
-Want a config file first?
+The package-facing first command is the same product moment with a shorter executable name. After the package is installed from npm or linked from this checkout, `proofroute demo` is the command developers should remember; in a cloned checkout, `npm run demo` points to the same zero-network proof when npm is available; after the npm name is public, `npx proofroute demo` becomes the no-commitment trial path for people who arrive from a GitHub star, a launch post, or a terminal screenshot. The package surface is checked separately with `npm run release:npm:dry-run` in CI so the public tarball keeps the CLI binaries, source, examples, docs, README, license, security notes, and environment template that the first-run story depends on.
+
+```sh
+proofroute demo
+```
+
+## Proof Packs
+
+The strongest maintainer first run is the core release proof pack. It needs no API key, makes no provider call, and makes no CUDA, TensorRT, or multi-GPU claim; it only proves the repository face, zero-network router value, proxy smoke path, prompt-free privacy boundary, SVG receipt, git provenance, and launch copy that any new contributor can reproduce on an ordinary laptop.
+
+```sh
+node ./bin/proofroute.js release --core --out proofroute-release-pack
+```
+
+When a maintainer wants a stronger ordinary-laptop receipt, `npm run classifier:artifact:evidence` and `npm run classifier:artifact:verify` generate and verify `classifier-linear-evidence.json`, then the local artifact proof can be folded into the same no-hardware-claim release archive. That path proves a hashed local classifier model artifact and benchmark gate while still saying plainly that no CUDA, TensorRT, or multi-GPU hardware claim is being made.
+
+```sh
+node ./bin/proofroute.js release --core --require-artifact-evidence --artifact-evidence classifier-linear-evidence.json --max-evidence-age-hours 24 --out proofroute-release-pack
+```
+
+Before any hardware claim becomes public copy, `node ./bin/proofroute.js doctor --strict-hardware` checks that the classifier is a warmed HTTP sidecar with at least two devices, at least two lanes, and nvidia-smi sourced profiles, while `node ./bin/proofroute.js release --preflight --require-evidence --evidence classifier-evidence.json --max-evidence-age-hours 24` explains the strict release blockers without writing a proof pack or running proxy smoke unless `--smoke` is explicitly added. This keeps the viral launch path honest: ordinary laptops can publish artifact proof, and NVIDIA machines must still prove real hardware.
+
+## Daily Workflow
+
+The wider first-run command trail starts with `node ./bin/proofroute.js share` or `npm run share` when the result needs to become a launch screenshot, `node ./bin/proofroute.js share --markdown` or `npm run share:markdown` when the same proof should be pasted into a README, PR comment, or launch post, and `node ./bin/proofroute.js share --svg --out docs/proofroute-terminal.svg` or `npm run share:svg` when the proof should become a repository hero asset. The public face stays aligned through `node ./bin/proofroute.js profile`, `npm run profile`, `node ./bin/proofroute.js profile --check-public`, `npm run profile:public:check`, `node ./bin/proofroute.js launch`, `node ./bin/proofroute.js launch --check-public`, `npm run launch`, and `node ./bin/proofroute.js prove --max-p95-ms 5 --min-accuracy 0.8`, because those commands tie the GitHub About description, topic string, README badges, npm metadata, public GitHub visibility, npm registry visibility, npm latest version, launch pitch, proof assets, privacy boundary, classifier evidence, and CI gate back to executable local evidence instead of README enthusiasm. The launch gate now validates that each checked-in SVG proof asset is a 1200 by 720 ProofRoute receipt with the expected title, description, role metadata, proof text, explicit no-hardware-claim copy for classifier previews, and no ANSI control codes, prompt-like leakage, or unverified hardware wording, so the README hero and release pack cannot quietly drift into a broken, generic, or overclaimed image.
+
+Once the proxy is running, `node ./bin/proofroute.js stats --since 1h`, `node ./bin/proofroute.js stats --watch --since 1h`, `node ./bin/proofroute.js privacy --file .proofroute/events.jsonl`, `npm run privacy`, `node ./bin/proofroute.js share --ledger --since 1h --markdown`, `node ./bin/proofroute.js prove --ledger --since 1h --min-requests 20 --max-p95-ms 5 --max-router-overhead-pct 1 --max-classifier-circuit-open 0`, and `node ./bin/proofroute.js tune --since 1h --export tuned-router.json` turn the current coding session into a private proof loop that can be reviewed or shared without exporting prompt text.
+
+## OpenAI Proxy
+
+The day-one integration flow is deliberately compact. `node ./bin/proofroute.js connect --port 8787` prints the OpenAI-compatible base URL and verification commands, while `eval "$(node ./bin/proofroute.js connect --shell sh)"` injects the same environment into the current shell. When the first executable model already lives behind LM Studio, vLLM, or another local OpenAI-compatible gateway, `node ./bin/proofroute.js connect --local-openai http://127.0.0.1:1234/v1 --local-openai-model qwen3` emits both the client-facing OpenAI variables and the proxy-side `PROOFROUTE_LOCAL_OPENAI_*` exports, then prints a config-free proxy command so the first routed request does not depend on `router.json`. `node ./bin/proofroute.js models`, `node ./bin/proofroute.js doctor`, `node ./bin/proofroute.js smoke`, and `node ./bin/proofroute.js smoke --proxy` show whether the configured providers are executable before an editor, SDK, or coding agent is pointed at `http://127.0.0.1:8787/v1`.
+
+## Routing Proof
+
+The hands-on routing path starts with `node ./bin/proofroute.js route --prompt "Refactor this webhook, explain the bug, and write a regression test."` and becomes explainable with `node ./bin/proofroute.js route --trace --prompt "Refactor this webhook, explain the bug, and write a regression test."`. Broader local evidence comes from `node ./bin/proofroute.js bench --prompt "Audit this repository migration plan and find the cheapest safe model." --runs 9`, `node ./bin/proofroute.js calibrate --file examples/samples.json`, `node ./bin/proofroute.js plan --prompt "Ship a router proxy, harden the tests, and rewrite the README for launch."`, and `node ./bin/proofroute.js fanout --prompt "Ship a router proxy, harden the tests, and rewrite the README for launch."`. Production-shaped execution is a single headless process with `node ./bin/proofroute.js proxy --port 8787 --config examples/router.json`, and persistent classifier acceleration can be proven locally with `node ./bin/proofroute-classifier.js --port 8788 --lanes 4 --devices 0,1 --device-names "RTX 4090,RTX A6000" --device-memory-mb 24576,49152 --device-runtime "CUDA 12.4" --scheduler least-inflight --batch-window-ms 0 --max-batch-size 16 --backend sidecar-builtin`.
+
+## Command Surface
+
+The `demo` command is the first-run proof loop. It routes a fixed suite of code, extraction, writing, long-context, and reasoning prompts without calling a provider, then renders one terminal card with p95 decision latency, p95 router overhead, labeled intent accuracy, estimated money saved, speed lift, intent mix, policy mix, classifier mix, and model mix. The `share` command uses the same zero-network report but formats it as a tighter routing receipt with local and cloud mix bars plus a copy-ready line for launch screenshots, which turns the first run into a social proof artifact instead of a private benchmark. When `--markdown` is provided, the receipt becomes plain Markdown without ANSI control codes, so the same proof can live inside GitHub discussions, PR comments, launch posts, and README sections without losing the p95 latency, p95 router overhead, money saved, speed lift, local-cloud split, intent mix, policy mix, classifier mix, model mix, model swap count, or copy line. When `--ledger` or `--file` is added to `share`, the receipt comes from the private telemetry ledger instead of the built-in launch suite, which lets a developer share proof from a real coding session while still omitting prompt and completion text. The `prove` command converts that proof loop into an executable gate for local scripts and CI: it exits non-zero when p95 routing latency, router overhead percentage, estimated savings, speed lift, labeled intent accuracy, or request volume miss the requested thresholds, which makes the near-zero-latency claim auditable instead of aspirational. When `--ledger` or `--file` is provided, `prove` reads the local privacy-preserving telemetry ledger instead of the built-in launch suite, so a team can gate real proxy traffic without storing prompt text or inventing a separate analytics service. The `launch` command composes the maintainer-facing release proof into one terminal card: it checks the repository face, runs the zero-network routing proof, optionally runs proxy smoke through a local fake provider, audits the selected telemetry ledger for prompt-free privacy, verifies that share assets exist, and treats classifier evidence as a warning unless `--require-evidence` asks for a hard hardware-backed release gate. The same command has `--json`, `--telemetry`, `--evidence`, and `--no-smoke` modes so local release scripts can consume the result without copying prompt text into logs. The `connect` command prints a drop-in connection card with the proxy start command, `OPENAI_BASE_URL`, `OPENAI_API_KEY`, legacy `OPENAI_API_BASE`, readiness checks, model discovery checks, browser-readable smoke proof command, and the ledger proof command, which lets an existing SDK, editor extension, or coding agent point at proofroute without hunting through docs. When `--shell` is provided, `connect` emits shell-native export commands for `sh`, `fish`, or PowerShell-compatible sessions, which lets a developer inject the proxy environment directly into the active tool session. The `models` command renders the configured catalog as a terminal map of executable routes, local and cloud coverage, context windows, price pairs, latency medians, and per-intent leaders, which turns model-choice anxiety into a quick audit rather than a research project. The `smoke` command starts a local fake OpenAI-compatible provider, routes one prompt, executes a real chat completion call through the Agent runtime, and proves authorization forwarding, selected-model forwarding, response parsing, savings, and speedup without touching an external network. When `--proxy` is provided, the same smoke path starts the transparent proxy itself, calls `/v1/chat/completions`, verifies routing headers and CORS-exposed browser proof headers, confirms the upstream model swap, shows router overhead, and proves that the SDK-facing entrypoint works before any external credential is needed. The `route` command is the fastest way to understand one prompt. It prints the detected intent, resolved policy, selected model, viable alternatives, Softmax probabilities, estimated latency, estimated cost, and savings against the most expensive viable baseline. The route command accepts `--tokens` and `--output-tokens` when a developer wants the cost and context fit calculation to mirror a known request budget instead of the default output estimate, `--max-cost-usd` when a request must stay under a hard estimated spend ceiling before Softmax ranking, and `--max-latency-ms` when a workflow needs a hard estimated latency ceiling before quality preference is considered. When `--trace` is provided, the same decision becomes an explainability view that shows the resolved policy, weighted quality, context, local, requested-model, cost, and latency contributions before stable Softmax turns them into probabilities, plus the models filtered out because they could not fit the required context, could not execute in proxy mode, exceeded the request budget, or exceeded the latency budget. The `bench` command is designed for instant persuasion: it repeatedly runs the local routing path, reports p50 and p95 controller latency, and renders terminal bars for money saved and speed gained. The `calibrate` command runs a local prompt suite and reports labeled intent accuracy, total savings, average speedup, intent mix, model mix, and p95 routing latency. The `plan` command turns one complex request into an asynchronous multi-agent routing plan, assigning architect, builder, reviewer, and optional specialist roles to their best-fit models before any provider call is made. The `fanout` command batches every executable role decision in one Controller pass, dispatches the role prompts through configured providers in parallel, then renders status, routed model, execution latency, reported tokens, cost, savings, and concise output previews so a team can prove multi-agent distribution without leaving the terminal. The `stats` command renders the local routing ledger as terminal proof, showing cumulative savings, local versus cloud mix, streaming share, cache hit share, fallback share, model swap share, classifier guard share, p95 decision time, p95 router overhead, p95 end-to-end time, intent mix, policy mix, requested-model mix, classifier mix, model mix, provider mix, status mix, and a latest-routes receipt that reveals the requested-to-routed model path, resolved policy, intent, classifier backend, savings, token count, router latency, status, and stream, fallback, classifier, or model-swap flags without exposing prompt text. The `privacy` command scans that same JSONL ledger for prompt-bearing fields, completion-bearing fields, raw request or response fields, credential-shaped keys, and invalid records, then exits non-zero without printing sensitive values if the local proof boundary has been violated. When `--watch` is provided to `stats`, the ledger view becomes a live terminal pulse for an active coding session, refreshing that private proof frame in place while the transparent proxy continues to serve normal SDK traffic. The `doctor` command checks local runtime readiness, executable model coverage, provider credentials, lightweight upstream health, telemetry writability, classifier mode, sidecar health, and routing policy so a developer can trust the proxy before swapping a client base URL. Upstream health probes use the provider's local or OpenAI-compatible discovery endpoint and surface unreachable providers as warnings, which keeps the first run honest without blocking deterministic local classification. When an HTTP classifier sidecar is configured, doctor calls its derived `/health` endpoint and reports backend, lanes, and response time when healthy, while an unavailable sidecar becomes a warning because the router can still fall back to the built-in classifier. When `--require-warmup` is provided, doctor turns a cold sidecar into a failing deployment gate, which lets CI or a startup script prove the local accelerator is warmed before real proxy traffic arrives. The `tune` command reads the same privacy-preserving ledger and recommends a policy and router-weight patch, turning local proof into a concrete optimization suggestion without rewriting configuration behind the user's back. When `--export` is provided, `tune` writes a merged JSON configuration to the requested path so the recommendation can become an explicit reviewed artifact. The `proxy` command starts an OpenAI-compatible server at `/v1/chat/completions`, `/v1/completions`, and `/v1/responses`, exposes executable model discovery at `/v1/models`, reports operational readiness at `/ready`, answers browser and editor preflight requests, rejects malformed JSON with explicit 400 responses, returns explicit 422 no-route responses when context, cost, latency, or executability constraints reject every candidate, converts local Ollama and Anthropic streaming into OpenAI-style server-sent events, adapts legacy Completions and simple Responses API requests through the same routed chat execution path, passes OpenAI-compatible streaming through without buffering for chat completions, retries the ranked fallback model after retryable 429 or 5xx upstream failures, and adds browser-readable response headers that expose the final model, requested model, model swap state, resolved routing policy, detected intent, decision latency, router overhead percentage, cache state, classifier backend, classifier circuit state, classifier failure count, fallback switch, estimated savings, actual token count, actual routed cost, and actual savings whenever the upstream returns usage metadata. When `--require-classifier-warmup` or `PROOFROUTE_REQUIRE_CLASSIFIER_WARMUP` is set, proxy startup checks the classifier sidecar's `/ready` endpoint first and refuses to listen if the local accelerator is still cold.
+
+Configuration is plain JSON because routing should be inspectable and portable. Providers define base URLs and credentials, while models define context window, price, median latency, throughput, and per-intent quality. The default catalog includes local Ollama-style execution and several cloud-shaped entries so the scoring behavior is useful immediately, but production users should replace the example prices and latency medians with their own observed numbers. The scoring function intentionally rewards quality, penalizes latency and cost, gives a small configurable bias to local models, applies a stable Softmax so extreme logits cannot overflow or produce invalid probabilities, and keeps a small in-process cache keyed by prompt fingerprint, token override, requested model, executable mode, and policy so repeated prompts can skip classifier work without persisting prompt text.
+
+Provider execution also has a hard upstream timeout so a transparent proxy cannot be held hostage by a slow local daemon or a saturated cloud endpoint. A provider can define `timeoutMs` for its own network ceiling, while `router.upstreamTimeoutMs` supplies the global fallback value. When the selected model times out, the Agent turns that hang into a retryable upstream failure and can immediately execute the ranked fallback model, which preserves the developer's flow and keeps the routing layer from becoming the new bottleneck.
+
+Routing policy can be selected per command with `--policy`, per proxied request through `metadata.proofroute_policy`, through the `x-proofroute-policy` HTTP header when the calling SDK makes headers easier than request metadata, or through virtual OpenAI-compatible model names such as `proofroute/local`, `proofroute/fast`, and `proofroute/quality` when an editor or coding agent only exposes the model field. The proxy advertises those virtual aliases from `/v1/models`, translates them into routing policy before scoring, and still forwards the final concrete model ID upstream. The same model discovery response includes ProofRoute metadata for each alias, including the resolved policy, a short routing description, the supported model alias, request header, request metadata, cost ceiling, and latency ceiling controls, while executable models expose provider, locality, context window, price, median latency, throughput, and best-fit intent. That makes the proxy self-describing to SDKs and editor model pickers without requiring a dashboard or separate documentation lookup. The resolved policy is preserved on the Controller decision, echoed back as `x-proofroute-policy`, and recorded in the local ledger, so a developer can prove that a request really ran under the intended cost, speed, quality, or local preference even when the upstream only receives a normal model name. The balanced policy is tuned for the default demo, the save policy makes cost more aggressive, the fast policy increases latency pressure, the quality policy lets stronger models win more often, and the local policy strongly prefers executable local models. The policy layer changes weights before Softmax rather than forcing brittle rules, so the router remains probabilistic, explainable, and numerically stable.
 
 ```sh
 node ./bin/proofroute.js init > router.json
-node ./bin/proofroute.js models --config router.json
-node ./bin/proofroute.js doctor --config router.json
 ```
 
-Starting from LM Studio, vLLM, or another local OpenAI-compatible server?
+For developers starting from LM Studio, vLLM, or another local OpenAI-compatible server, `node ./bin/proofroute.js init --preset local-openai > router.json` emits the same executable local gateway shape as `examples/local-openai-router.json`, including `requiresApiKey: false`, local policy bias, and the command-backed classifier example. The project is built with no runtime dependencies. Modern Node.js provides the HTTP server, fetch client, test runner, and performance timers needed for the first release, which keeps installation friction low and makes the repository easy to audit. The CLI can still be installed by any package manager that understands `package.json`, but the core demo path works with direct `node` execution so the first impression is fast even on stripped-down developer machines.
+
+Provider discovery works through JSON configuration and environment variables. `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, and `OLLAMA_BASE_URL` are enough to make the default catalog executable for common local and cloud setups, while `.env.example` documents the shape without asking the router to load secrets by itself. Local OpenAI-compatible gateways such as vLLM, LM Studio, and private model servers can be represented as normal providers with a `baseUrl`, a chat completion endpoint, `local` models, and `requiresApiKey` set to false, so the runtime keeps their OpenAI-shaped protocol instead of forcing Ollama adaptation. For the fastest local gateway path, `PROOFROUTE_LOCAL_OPENAI_BASE_URL` appends an executable zero-price local OpenAI-compatible model to the existing catalog without requiring a JSON file, while `PROOFROUTE_LOCAL_OPENAI_MODEL`, `PROOFROUTE_LOCAL_OPENAI_CONTEXT_WINDOW`, `PROOFROUTE_LOCAL_OPENAI_LATENCY_MS`, and `PROOFROUTE_LOCAL_OPENAI_TOKENS_PER_SECOND` let the generated model mirror a real LM Studio, vLLM, or private gateway. The generated provider uses `/models` as its doctor health path by default, so the same environment-only setup can prove readiness before the proxy receives traffic. The same environment-only catalog is used by `proxy`, so a developer can point an OpenAI-compatible client at ProofRoute and have requests forwarded to a local gateway without writing `router.json` first. Existing OpenAI-compatible clients can switch their base URL to `http://127.0.0.1:8787/v1`, call `/v1/models` to see the executable catalog, and send Chat Completions, legacy Completions, or simple Responses API requests through the proxy while proofroute adds its routing evidence in response headers. Those headers now include requested model, final model, model swap state, router overhead percentage, classifier backend, classifier circuit state, classifier failure count, stream state, usage proof source, estimated token plan, and standard `Server-Timing` entries for router and total proxy time alongside policy, intent, cache, latency, token, cost, and savings proof, so an editor, SDK wrapper, browser DevTools panel, or web sandbox can show whether a local accelerator was trusted, bypassed, protected by fallback, or serving a stream whose cost proof is still estimate-backed without reading prompt text. Chat `max_tokens`, chat `max_completion_tokens`, legacy Completions `max_tokens`, and Responses `max_output_tokens` flow into the routing decision before provider execution, so context filtering and cost estimates match the request budget instead of a generic default. Request metadata can also carry `proofroute_max_cost_usd`, `max_cost_usd`, `proofroute_max_latency_ms`, or `max_latency_ms`, and the equivalent `x-proofroute-max-cost-usd` and `x-proofroute-max-latency-ms` headers are accepted for SDKs and browser tools that expose headers more naturally than metadata. Those ceilings make the proxy reject over-budget or over-latency candidates before ranking and then explain the rejection in route traces.
+
+The `examples/local-openai-router.json` file is a concrete local gateway recipe for LM Studio, vLLM, or any private OpenAI-compatible model server that does not require an API key. It pairs that gateway with `examples/classifier-command.js`, a tiny stdin/stdout classifier that supports both the single-prompt and batch contracts, so a developer can see exactly how to replace the deterministic classifier with a local accelerator command before moving the same protocol behind the persistent sidecar.
+
+The proxy records a privacy-preserving local routing ledger at `.proofroute/events.jsonl` by default. The ledger intentionally stores routing evidence rather than prompt text: timestamp, requested model, final model, model swap state, provider, locality, resolved policy, intent, classifier backend, classifier circuit state, confidence, token estimates, estimated cost, savings, speedup, decision latency, router overhead percentage, end-to-end latency, streaming mode, and status code. When a non-streaming upstream returns a usage object, the proxy also records actual input tokens, output tokens, total tokens, actual routed cost, actual baseline cost, and actual savings without storing prompt or completion text. That file powers `stats`, which gives maintainers and users a concrete local proof loop with aggregate charts, requested-model mix, model swap counts, router overhead, policy mix, classifier mix, classifier guard counts, and latest-route receipts, without sending telemetry to a hosted service or leaking proprietary prompts into analytics. The stats view uses a tolerant ledger reader so one malformed JSONL record cannot erase the valid proof from an active coding session; it skips malformed records, reports the affected line numbers without printing their contents, and points the user to `privacy` before any ledger is shared or used as a gate. The same file also powers `privacy`, which scans each JSONL record for prompt, completion, request, response, authorization, secret, API key, or raw text fields and fails without printing their values if the ledger ever stops being proof-only evidence. When `node ./bin/proofroute.js stats --watch --since 1h` is left open beside an editor, the same private ledger becomes a live terminal pulse that refreshes the current coding session's savings, requested-to-routed model paths, model mix, policy mix, classifier guard state, and latest routes as requests pass through the transparent proxy.
+
+Ledger proof commands accept `--since` with durations such as `30m`, `1h`, and `7d`, or with an ISO timestamp, so a developer can turn the current session into a clean receipt without deleting older evidence. The same session window is shared by `stats`, `share --ledger`, `prove --ledger`, and `tune`, while `privacy --file .proofroute/events.jsonl` audits the ledger boundary itself before a receipt is pasted into public channels. This keeps screenshots, Markdown receipts, CI gates, privacy checks, and policy recommendations grounded in the same private slice of real proxy traffic. When `prove --ledger --max-router-overhead-pct 1 --max-classifier-circuit-open 0` is used, the same gate fails if routing overhead rises above the configured percentage of selected-model latency or if the external classifier fallback circuit opened during that window, giving accelerator deployments an enforceable zero-latency guard instead of a best-effort warning hidden in logs.
+
+The same ledger powers `tune`, which is intentionally advisory rather than magical. It reads observed local and cloud mix, streaming share, savings per request, average speedup, p95 decision latency, and classifier circuit counts, then suggests whether balanced, save, fast, quality, or local policy better matches the workload. When the external classifier fallback circuit opened during the measured window, `tune` also emits a classifier patch that shortens the timeout and lengthens the cooldown so the accelerator cannot keep charging the proxy repeated timeout latency while it is unhealthy. The output includes compact router and classifier patches so the developer can decide when to export the recommendation into configuration, which keeps the system explainable while still making the router feel like it gets smarter through use.
+
+The current local classifier is intentionally compact and deterministic. It uses weighted lexical features, prompt-shape signals such as code fences and stack traces, estimated token pressure, and a stable probability distribution to choose among code, reasoning, writing, extraction, long-context, and chat intents. The implementation is shaped so a future native GPU classifier can replace the scoring internals without changing the Agent or View contracts. That gives the repository a credible growth path from viral prototype to serious routing substrate.
+
+Teams with local accelerators can attach an external classifier through `PROOFROUTE_CLASSIFIER` or a `classifier.command` field in JSON configuration. For one prompt, the command receives a JSON object on stdin with `prompt` and should print an intent object on stdout; for batch paths, the same command receives `prompts` and can print either an array of intent objects or an object with a `data` array. ProofRoute keeps a tight timeout and automatically falls back to the built-in deterministic classifier, which means a GPU sidecar or warmed command runner can improve classification without ever being allowed to make routing slower than the request it is trying to optimize. When an external classifier repeatedly fails or times out, the local fallback circuit opens after `PROOFROUTE_CLASSIFIER_FAILURE_THRESHOLD` failures and stays open for `PROOFROUTE_CLASSIFIER_COOLDOWN_MS`, so the transparent proxy stops paying repeated timeout costs while the accelerator is unhealthy and annotates the fallback intent with circuit metadata for telemetry and proof output.
+
+For persistent local accelerators, `PROOFROUTE_CLASSIFIER_URL` or `classifier.url` points the Controller at an HTTP sidecar that accepts a prompt JSON payload and returns an intent object. CLI and proxy paths use the asynchronous classifier interface when a URL is configured, while the synchronous built-in classifier remains available for zero-dependency operation. This is the intended production shape for multi-GPU classification because the model can stay warm in its own process and the router can enforce a small timeout before falling back. The repository now ships `proofroute-classifier` as a runnable reference sidecar that exposes `GET /health`, `GET /ready`, `GET /metrics`, `POST /warmup`, `POST /classify`, and `POST /classify/batch`, uses the built-in classifier to prove the contract with no extra dependencies, reports backend name, scheduler, warmed state, warmup count, readiness requirement, batch window, max batch size, observed batch sizes, declared classifier lanes, visible accelerator devices, optional device profile metadata, request count, error count, uptime, inflight lane occupancy, per-lane requests, per-lane errors, peak inflight, and average plus maximum decision time without storing prompt text, then assigns classification requests to the least busy lane by default while preserving round-robin as an explicit scheduler option. Device profiles can come from `PROOFROUTE_GPU_DEVICE_PROFILES`, `PROOFROUTE_GPU_DEVICE_NAMES`, `PROOFROUTE_GPU_MEMORY_MB`, `PROOFROUTE_GPU_RUNTIME`, and `PROOFROUTE_GPU_DRIVER`, and when those fields are absent the sidecar performs a bounded `nvidia-smi` startup probe controlled by `PROOFROUTE_GPU_AUTO_DETECT` and `PROOFROUTE_GPU_DETECT_TIMEOUT_MS`. That lets health checks, metrics receipts, doctor output, and prompt-free JSON artifacts show named hardware such as an RTX 4090 or A6000 rather than anonymous ids without making every route pay a hardware discovery cost. When `--require-warmup` or `PROOFROUTE_CLASSIFIER_REQUIRE_WARMUP` is enabled, `GET /ready` stays at 503 until `/warmup` passes, which gives container health checks and startup scripts the same warmed-state truth that `doctor --require-warmup` uses. When a batch-capable backend is attached, concurrent single-prompt `/classify` calls are microbatched through `classifyMany` with `PROOFROUTE_CLASSIFIER_BATCH_WINDOW_MS` and `PROOFROUTE_CLASSIFIER_MAX_BATCH_SIZE`, giving ONNX, TensorRT, vLLM, or a custom multi-GPU classifier the throughput shape it needs without changing router clients. The same sidecar can wrap a spawn-per-call classifier with `--command` or `PROOFROUTE_CLASSIFIER_COMMAND`, and it can keep an NDJSON worker hot with `--persistent-command` or `PROOFROUTE_CLASSIFIER_PERSISTENT_COMMAND`, which is the sharper path for real accelerator code because weights stay loaded while requests stream through the same prompt-free HTTP contract. Controller batch routing preserves the same prompt-fingerprint cache semantics as single routing, and multi-prompt proof paths such as `demo`, `calibrate`, `plan`, and `fanout` can consume the batch classifier path so accelerator deployments prove value without paying repeated classifier startup overhead.
+
+The `classifier` command turns that sidecar telemetry into a terminal-native accelerator receipt. When a sidecar URL is configured, `node ./bin/proofroute.js classifier` fetches `/metrics` and renders backend identity, scheduler, warmup state, microbatch count, average batch size, maximum observed batch size, request count, error count, uptime, inflight work, visible devices, device profiles, and lane-level request bars with average and maximum decision time. When `--warmup` is provided, the command first calls the sidecar's prompt-free `/warmup` endpoint, runs a small representative classifier suite through the active backend, and then renders the warmed state so a local worker can prove weights are loaded before the transparent proxy receives real traffic. When `--svg --out docs/proofroute-classifier.svg` is provided, the same prompt-free sidecar receipt becomes a shareable accelerator contract card suitable for a README image, launch post, or pull request comment, and `npm run classifier:svg` keeps that generation path discoverable for maintainers who have `PROOFROUTE_CLASSIFIER_URL` pointed at a running sidecar. The checked-in classifier SVGs intentionally say `hardware claim none`; public CUDA, TensorRT, or multi-GPU copy must come from the stricter `npm run classifier:hardware:evidence` and `npm run classifier:hardware:verify` path before it becomes a claim. When no sidecar is configured, the same command explains whether the built-in classifier or a command classifier is active, which keeps the headless workflow honest about whether the multi-lane accelerator proof exists yet.
+
+![ProofRoute classifier accelerator proof](docs/proofroute-classifier.svg)
+
+The same command can run `node ./bin/proofroute.js classifier --bench --runs 5` to classify a local prompt suite through the active builtin, command, or HTTP sidecar classifier, then render p95 classifier latency, prompts per second, average batch size, labeled intent accuracy, backend mix, batch mix, lane mix, and device mix without storing or printing prompt text. When a sidecar is configured, `node ./bin/proofroute.js classifier --bench --warmup --runs 5` first drives the warmup suite through `/warmup` and then runs the benchmark, which lets a GPU worker prove that weights are loaded before its throughput number is trusted. When `--max-p95-ms`, `--min-accuracy`, `--min-throughput`, `--min-devices`, `--min-lanes`, or `--require-device-profiles` is provided, the benchmark becomes a failing proof gate for CI and local accelerator experiments, so a launch claim can require both speed and real multi-device evidence. When a post or release claims real local hardware rather than a declared device map, `--require-hardware-probe` raises that bar again by requiring every visible accelerator profile in the benchmark gate to come from the bounded `nvidia-smi` startup probe, which makes named RTX, A-series, CUDA, and driver metadata materially harder to fake with a hand-written config string.
+
+When `--json --out classifier-proof.json` is provided, the same prompt-free proof is written as a CI or launch artifact without polluting stdout; when `--evidence --json --out classifier-evidence.json`, `npm run classifier:artifact:evidence`, `npm run classifier:evidence`, or `npm run classifier:hardware:evidence` is used, the artifact also records sanitized command metadata, Node runtime, sidecar or command mode, gate outcomes, optional device profiles, nvidia-smi profile counts when present, selected accelerator configuration, and SHA-256 hashes of local model, ONNX, or TensorRT engine files without storing prompts. `node ./bin/proofroute.js classifier --verify-evidence classifier-evidence.json --max-evidence-age-hours 24` or `npm run classifier:verify` then recomputes those local hashes, verifies gate status, validates the evidence timestamp, and independently confirms required device profiles or the hardware probe gate, while `npm run classifier:hardware:verify` is the stricter verification command for public accelerator claims because it also requires the hardware probe gate. `npm run classifier:artifact:verify` uses the explicit `--allow-artifact-only` path for local linear evidence that proves a model hash and benchmark gate without making an accelerator claim. `node ./bin/proofroute.js launch --require-artifact-evidence --artifact-evidence classifier-linear-evidence.json --max-evidence-age-hours 24` and `node ./bin/proofroute.js release --core --require-artifact-evidence --artifact-evidence classifier-linear-evidence.json --max-evidence-age-hours 24 --out proofroute-release-pack` lift that ordinary-laptop artifact proof into the launch and release surfaces with the main accelerator claim marked as none, so artifact proof cannot be mistaken for CUDA, TensorRT, or multi-GPU hardware proof. Verification emits the same machine-readable `proofroute-classifier-evidence-verify-v1` report when evidence is stale, tampered with, invalid JSON, missing entirely, missing a hashed artifact, or missing device evidence required by the selected claim level, which means CI and release scripts can read the `evidence_file`, `artifact_hash`, `device_profiles`, or `hardware_probe` blocker instead of scraping stack traces. When `--svg --out docs/proofroute-classifier-benchmark.svg` or `npm run classifier:bench:svg` is used, the benchmark becomes a shareable accelerator performance card with p95 latency, throughput, accuracy, batch mix, backend mix, device mix, and nvidia-smi profile count. This gives local accelerator work a hard terminal proof before it is trusted on the proxy path, which matters because a classifier that costs more latency than it saves is just another model menu in disguise.
+
+The bundled persistent worker example can be started with `node ./bin/proofroute-classifier.js --warmup --require-warmup --persistent-command "node ./examples/persistent-classifier-command.js" --batch-window-ms 1 --max-batch-size 16`, which demonstrates the NDJSON protocol expected from a hot local classifier process without adding runtime dependencies and proves the warmup path as soon as the sidecar begins listening. The more production-shaped template at `examples/accelerator-worker.js` keeps the same NDJSON protocol but adds backend, device, batch mode, batch size, and decision-time metadata, and it can load a user-provided module through `PROOFROUTE_ACCELERATOR_MODULE` so ONNX, TensorRT, vLLM, or private embedding code can replace the fallback classifier while preserving the prompt-free sidecar contract. When `PROOFROUTE_ACCELERATOR_DEVICES` or `CUDA_VISIBLE_DEVICES` exposes more than one GPU, the worker shards explicit batches across those visible devices with a simple round-robin scheduler, warms each device on startup, and keeps the per-device assignment in the emitted metadata so benchmark receipts can show which GPU handled which prompt. The companion `examples/accelerator-module.js` file is a tiny warmable module that implements the same `classifyMany` shape a real accelerator adapter would expose, so maintainers can verify the plug-in contract before bringing in heavyweight native runtimes. A real accelerator can keep weights loaded in that worker, read one JSON request per line, echo the request `id`, and return either one intent or a `data` array for batched prompts.
+
+The `examples/linear-accelerator-module.js` module turns that contract into a real zero-dependency model-artifact path. It loads `examples/linear-intent-model.json` or the file named by `PROOFROUTE_ACCELERATOR_MODEL`, compiles intent weights once during warmup, scores each batch shard with a numerically stable Softmax, and returns ranked intent probabilities plus artifact, warmup, batch, shard, and device metadata without emitting prompt text. This gives teams a credible intermediate step between the deterministic built-in classifier and a native ONNX, TensorRT, vLLM, or private embedding backend: the sidecar can already prove that a replaceable local model artifact is warmed, batched, distributed across devices, and fast enough before the proxy is allowed to receive traffic.
+
+The optional `examples/onnx-accelerator-module.js` module keeps the repository zero-dependency while defining the native runtime shape for teams that do install `onnxruntime-node`. It reads `PROOFROUTE_ONNX_MODEL` or `PROOFROUTE_ACCELERATOR_MODEL`, builds a deterministic feature tensor, runs the configured ONNX session through execution providers such as CUDA and CPU, then converts logits into ranked intents with the same stable Softmax discipline as the Controller. This lets a real ONNX classifier artifact replace the linear demo without changing the sidecar, worker, proxy, benchmark, or readiness contract. The `proofroute learn` command is the official zero-dependency online calibration path: it reads either raw labeled samples or a `proofroute calibrate --json` report, updates the local linear intent weights, records before-and-after accuracy in the artifact, and can immediately call the ONNX exporter for the trained model. The repository also ships `examples/train-linear-intent-model.js` as the thin script form of the same Agent-layer training implementation, plus `examples/export-linear-intent-onnx.js`, a zero-dependency exporter that turns `examples/linear-intent-model.json` into the checked-in `examples/linear-intent-model.onnx` logits model with a simple `MatMul` plus `Add` graph, feature-name metadata, intent-name metadata, and the same six-intent output order consumed by the adapter. The official ONNX launcher is `sh ./examples/onnx-accelerator-sidecar.sh`, or `npm run classifier:onnx` when a package manager is available, and it defaults to that generated artifact while still allowing accelerator teams to point `PROOFROUTE_ONNX_MODEL` at their own native model.
+
+The optional `examples/tensorrt-accelerator-module.js` module defines the same production classifier surface for teams that have already compiled a TensorRT engine on their own machine. It loads a runtime package named by `PROOFROUTE_TENSORRT_RUNTIME_PACKAGE`, opens the serialized engine from `PROOFROUTE_TENSORRT_ENGINE` or `PROOFROUTE_ACCELERATOR_MODEL` once per visible device, sends the same feature tensor shape used by the ONNX adapter, and converts returned logits into ranked intents with stable Softmax before the worker adds backend, device, shard, batch, and decision-time metadata. The launcher `sh ./examples/tensorrt-accelerator-sidecar.sh` and package script `npm run classifier:tensorrt` intentionally require an explicit engine path because TensorRT engines are hardware-specific artifacts, but once that path is supplied they join the same warmup, readiness, microbatching, multi-device benchmark gate, JSON artifact, evidence bundle, and SVG proof flow as the linear and ONNX adapters. This closes the important engineering gap between a viral demo and a serious local accelerator story: CUDA and TensorRT deployments can prove named devices, compiled precision, batch limits, p95 classifier latency, throughput, engine digest, and device profile evidence without moving prompt text through a hosted service.
+
+The same artifact path can be launched through `node ./bin/proofroute-classifier.js --port 8788 --warmup --require-warmup --backend linear-artifact --devices 0,1 --scheduler least-inflight --persistent-command "node ./examples/accelerator-worker.js" --accelerator-module examples/linear-accelerator-module.js --accelerator-model examples/linear-intent-model.json`, by running `sh ./examples/linear-accelerator-sidecar.sh`, or through `npm run classifier:linear` when a package manager is available, which keeps the official classifier entrypoint on the fast path while still using the artifact-backed worker under the hood. A no-GPU machine can run `sh ./examples/linear-local-classifier-sidecar.sh` or `npm run classifier:linear:sidecar` to start the same worker with one manual CPU profile, then generate `classifier-linear-evidence.json` through `npm run classifier:linear:evidence` and verify it with `npm run classifier:linear:verify`; that path proves local artifact hash, warmup, benchmark gates, and prompt-free telemetry without claiming `nvidia-smi` hardware. The ONNX wrapper mirrors that same sidecar contract with `examples/onnx-accelerator-sidecar.sh` and `npm run classifier:onnx`, while the TensorRT wrapper mirrors it with `examples/tensorrt-accelerator-sidecar.sh` and `npm run classifier:tensorrt` once `PROOFROUTE_TENSORRT_ENGINE` points at a local serialized engine. `node ./examples/export-linear-intent-onnx.js --out examples/linear-intent-model.onnx` and `npm run export:onnx` keep the checked ONNX artifact reproducible from plain JSON, and `node ./bin/proofroute.js calibrate --file examples/samples.json --json --out calibration.json` writes the same report shape that `node ./bin/proofroute.js learn --samples calibration.json --out examples/linear-intent-model.trained.json --onnx-out examples/linear-intent-model.trained.onnx` and `npm run train:intent` can consume, so labeled samples become a reviewed model artifact before they reach the sidecar. That means the linear artifact, trained JSON model, generated ONNX model, ONNX adapter, TensorRT adapter, and private embedding modules all share one warmed, batched, prompt-free classifier surface.
 
 ```sh
-node ./bin/proofroute.js init --preset local-openai > router.json
-node ./bin/proofroute.js doctor --config router.json
+PROOFROUTE_CLASSIFIER_URL=http://127.0.0.1:8788/classify node ./bin/proofroute.js route --prompt "Refactor this function and add a regression test."
 ```
 
-The local OpenAI preset mirrors [examples/local-openai-router.json](examples/local-openai-router.json): no API key required, local policy bias, a local model entry, and a command-backed classifier example.
-
-## Drop-In OpenAI Proxy
-
-Start ProofRoute once:
-
-```sh
-node ./bin/proofroute.js proxy --port 8787 --config examples/router.json
-```
-
-Point existing tools at it:
-
-```sh
-export OPENAI_BASE_URL=http://127.0.0.1:8787/v1
-export OPENAI_API_BASE=http://127.0.0.1:8787/v1
-export OPENAI_API_KEY=proofroute-local
-```
-
-Or let the CLI print the exact connection card:
-
-```sh
-node ./bin/proofroute.js connect --port 8787
-eval "$(node ./bin/proofroute.js connect --shell sh)"
-```
-
-ProofRoute serves:
-
-| Endpoint | Purpose |
-| --- | --- |
-| `/v1/chat/completions` | Routed chat completions, including streaming |
-| `/v1/completions` | Legacy completions adapted through the routed chat path |
-| `/v1/responses` | Simple Responses API requests routed through the same engine |
-| `/v1/models` | Executable model discovery for configured providers |
-| `/ready` | Operational readiness check |
-
-Proxy responses expose browser-readable routing headers for the selected model, detected intent, decision latency, cache state, fallback switch, estimated savings, actual token count, actual routed cost, and actual savings when upstream usage metadata is available.
-
-## Terminal Proof Loop
-
-Use `route` when you want to understand one prompt:
-
-```sh
-node ./bin/proofroute.js route \
-  --trace \
-  --prompt "Refactor this webhook, explain the bug, and write a regression test."
-```
-
-Use `bench`, `calibrate`, and `prove` when you want evidence that survives a screenshot, a PR comment, or CI:
-
-```sh
-node ./bin/proofroute.js bench --prompt "Audit this migration plan." --runs 9
-node ./bin/proofroute.js calibrate --file examples/samples.json
-node ./bin/proofroute.js prove --max-p95-ms 5 --min-accuracy 0.8
-```
-
-After real proxy traffic, turn the local ledger into a receipt:
-
-```sh
-node ./bin/proofroute.js stats
-node ./bin/proofroute.js share --ledger --markdown
-node ./bin/proofroute.js prove --ledger --min-requests 20 --max-p95-ms 5
-node ./bin/proofroute.js tune --export tuned-router.json
-```
-
-## Privacy Model
-
-ProofRoute is designed to make routing auditable without making your prompts portable.
-
-- Prompt classification runs locally by default through a deterministic, dependency-free classifier.
-- The route cache uses prompt fingerprints rather than storing prompt text on disk.
-- The proxy writes `.proofroute/events.jsonl` by default.
-- The ledger stores routing evidence: timestamp, model, provider, locality, intent, confidence, token estimates, estimated cost, savings, speedup, decision latency, end-to-end latency, streaming mode, and status code.
-- When non-streaming upstreams return usage metadata, the ledger can also store actual input tokens, output tokens, total tokens, actual routed cost, actual baseline cost, and actual savings.
-- Prompt text and completion text are intentionally omitted from telemetry.
-
-That ledger powers `stats`, `share --ledger`, `prove --ledger`, and `tune`, so a team can build evidence from real work without sending private development context to a hosted analytics product.
-
-## Routing Controls
-
-ProofRoute filters impossible routes before scoring. Context limits, executability, estimated cost ceilings, and estimated latency ceilings can reject candidates before the Softmax ranking is calculated.
-
-```sh
-node ./bin/proofroute.js route --tokens 8000 --output-tokens 1200 --prompt "audit this plan"
-node ./bin/proofroute.js route --max-cost-usd 0.001 --prompt "keep this cheap"
-node ./bin/proofroute.js route --max-latency-ms 1500 --prompt "keep this fast"
-node ./bin/proofroute.js route --policy save --prompt "summarize these logs"
-```
-
-Policies adjust the same scoring function:
-
-| Policy | Bias |
-| --- | --- |
-| `balanced` | Default quality, cost, latency, and local-model tradeoff |
-| `save` | Stronger cost pressure |
-| `fast` | Stronger latency pressure |
-| `quality` | Lets stronger models win more often |
-| `local` | Strong preference for executable local models |
-
-Proxy callers can pass the same controls through request metadata or headers:
-
-| Control | Metadata | Header |
-| --- | --- | --- |
-| Policy | `metadata.proofroute_policy` | `x-proofroute-policy` |
-| Max estimated cost | `metadata.proofroute_max_cost_usd` or `metadata.max_cost_usd` | `x-proofroute-max-cost-usd` |
-| Max estimated latency | `metadata.proofroute_max_latency_ms` or `metadata.max_latency_ms` | `x-proofroute-max-latency-ms` |
-
-## Command Matrix
-
-| Command | What it proves |
-| --- | --- |
-| `route` | Classify one prompt and print the selected model with cost, speed, alternatives, and optional trace evidence |
-| `demo` | Render a zero-network proof card with savings, speedup, p95 latency, intent mix, and route mix |
-| `share` | Render a copy-ready routing receipt for screenshots, Markdown posts, PRs, and launch notes |
-| `prove` | Exit non-zero when latency, savings, speed, request volume, or accuracy gates miss |
-| `connect` | Print the drop-in proxy base URL, environment exports, and smoke/proof commands |
-| `models` | Render executable catalog coverage, context windows, prices, latency medians, and per-intent leaders |
-| `smoke` | Run a fake-provider execution loop through the runtime or transparent proxy without external credentials |
-| `bench` | Repeatedly run local routing and show p50/p95 controller latency, savings, and speed gain |
-| `calibrate` | Run a prompt suite and report labeled intent accuracy, total savings, average speedup, and model mix |
-| `plan` | Split one complex request into architect, builder, reviewer, and optional specialist route decisions |
-| `fanout` | Execute a multi-agent plan through configured providers in parallel |
-| `stats` | Render the local routing ledger as terminal proof |
-| `classifier` | Show sidecar backend, lane, device, error, and latency telemetry |
-| `doctor` | Check runtime, providers, telemetry path, classifier mode, sidecar health, and routing policy |
-| `tune` | Recommend or export a routing-policy patch from local telemetry |
-| `proxy` | Start the OpenAI-compatible transparent proxy |
-| `init` | Print the default or local OpenAI-compatible model catalog as editable JSON |
-
-## Configuration
-
-Configuration is plain JSON because routing policy should be inspectable.
-
-```json
-{
-  "router": {
-    "softmaxTemperature": 0.82,
-    "latencyPenaltyMs": 900,
-    "costPenaltyUsd": 0.00035,
-    "qualityWeight": 2.1,
-    "localBias": 0.18
-  },
-  "providers": {
-    "local": {
-      "baseUrl": "http://127.0.0.1:11434",
-      "kind": "ollama"
-    },
-    "openai": {
-      "baseUrl": "https://api.openai.com/v1",
-      "apiKey": "env:OPENAI_API_KEY"
-    }
-  }
-}
-```
-
-Models define context window, price, median latency, throughput, provider, endpoint, locality, and per-intent quality. Production users should replace example prices and latency medians with observed numbers from their own traffic.
-
-Environment variables supported by the default discovery path include:
-
-| Variable | Purpose |
-| --- | --- |
-| `OPENAI_API_KEY` | Cloud OpenAI-compatible provider credentials |
-| `ANTHROPIC_API_KEY` | Anthropic provider credentials when configured |
-| `OLLAMA_BASE_URL` | Local Ollama daemon URL |
-| `PROOFROUTE_LOCAL_OPENAI_BASE_URL` | Append an executable local OpenAI-compatible model without a JSON file |
-| `PROOFROUTE_LOCAL_OPENAI_MODEL` | Override the generated local OpenAI-compatible model id |
-| `PROOFROUTE_LOCAL_OPENAI_CONTEXT_WINDOW` | Override generated context window |
-| `PROOFROUTE_LOCAL_OPENAI_LATENCY_MS` | Override generated latency estimate |
-| `PROOFROUTE_LOCAL_OPENAI_TOKENS_PER_SECOND` | Override generated throughput estimate |
-
-## Classifier Acceleration
-
-The built-in classifier is deterministic and compact. It uses weighted lexical features, prompt-shape signals, token pressure, and a stable probability distribution across `code`, `reasoning`, `writing`, `extraction`, `long_context`, and `chat`.
-
-Teams with local accelerators can replace or augment that path:
-
-```sh
-PROOFROUTE_CLASSIFIER="node ./examples/classifier-command.js" \
-  node ./bin/proofroute.js route --prompt "Refactor this function and add a regression test."
-
-node ./bin/proofroute-classifier.js --port 8788 --lanes 4 --devices 0,1 --backend sidecar-builtin
-
-PROOFROUTE_CLASSIFIER_URL=http://127.0.0.1:8788/classify \
-  node ./bin/proofroute.js classifier
-```
-
-The HTTP sidecar contract supports `GET /health`, `GET /metrics`, `POST /classify`, and `POST /classify/batch`. It lets ONNX, TensorRT, vLLM, or a custom multi-GPU classifier stay warm in another process while ProofRoute enforces a tight timeout and falls back to the built-in classifier when the accelerator is unavailable.
-
-## Architecture
-
-ProofRoute follows an Agent-View-Controller shape:
-
-- **Controller**: local intent recognition, token estimation, context fit checks, cost modeling, latency modeling, route cache, policy weights, and stable Softmax ranking.
-- **Agent**: OpenAI-compatible forwarding, Ollama adaptation, Anthropic/OpenAI-shaped streaming, fallback execution, smoke tests, proxy lifecycle, benchmark orchestration, and fanout execution.
-- **View**: terminal-native proof cards, route traces, Markdown receipts, proxy connection cards, catalog maps, stats, tuning output, and classifier receipts.
-
-Read the deeper design notes in [docs/architecture.md](docs/architecture.md).
-
-## Development
+Tests focus on the parts where correctness matters most. The Softmax test protects against overflow and invalid probability mass, the classifier test checks code-heavy prompt recognition, and the route controller test verifies that a full decision includes ranked candidates, cost savings, and latency estimates. Run the suite with the built-in Node test runner. Contributions should follow the same proof-first shape described in [CONTRIBUTING.md](CONTRIBUTING.md), and sensitive proxy or privacy issues should follow the disclosure path in [SECURITY.md](SECURITY.md).
 
 ```sh
 node --test
-npm run check
 ```
 
-The tests focus on the correctness-sensitive parts: classifier behavior, Softmax stability, route decisions, proxy selection, streaming adapters, telemetry, policy controls, doctor checks, sidecar classifier behavior, local gateway examples, and fallback handling.
+Maintainer-facing repository copy lives in [docs/repository-profile.md](docs/repository-profile.md), and the same public surface can be printed with `node ./bin/proofroute.js profile` or `npm run profile`. The release-facing version is `node ./bin/proofroute.js launch` or `npm run launch`, which folds that repository face into the zero-network proof, proxy smoke, privacy audit, share asset check, and classifier evidence status before a maintainer turns README copy into a public claim. When the real GitHub surface should be part of that release gate, `node ./bin/proofroute.js launch --check-github` adds the live About description, homepage, and topic drift check to the same terminal readiness card while keeping the default launch path local. The external GitHub face can also be checked directly with `node ./bin/proofroute.js profile --check-github` or `npm run profile:github:check`, and it can be explicitly synchronized with `node ./bin/proofroute.js profile --sync-github` or `npm run profile:github:sync`, which writes the About description, homepage, and twenty-topic set only when a maintainer asks for that remote mutation through a GitHub token or an authenticated `gh` session.
 
-## License
+The shareable core archive is `node ./bin/proofroute.js release --core --out proofroute-release-pack` or `npm run release:core`, which writes `repository-profile.json`, `launch-readiness.json`, `git-provenance.json`, a paragraph-only `proofroute-release.md`, prompt-free `launch-copy.md`, copied SVG proof assets, and an explicit no-accelerator-claim classifier evidence state into one folder for release notes, pull requests, and launch posts. `node ./bin/proofroute.js release --core --require-artifact-evidence --artifact-evidence classifier-linear-evidence.json --max-evidence-age-hours 24 --out proofroute-release-pack` or `npm run release:artifact` adds a hashed local classifier artifact and verification report to that same archive without changing the hardware claim boundary. `node ./bin/proofroute.js release --preflight --core --check-public` checks public GitHub and npm visibility without writing the proof pack, `npm run release:strict:preflight` checks the strict hardware release surface without writing the proof pack and skips proxy smoke unless `--smoke` is added, `npm run release:pack:local` keeps the core proof-pack generation path available for CI without a live GitHub API dependency, `node ./bin/proofroute.js release --out proofroute-release-pack --check-github` or `npm run release:pack` adds the live GitHub face check for maintainer releases, and `npm run release:strict` requires classifier evidence to include the hardware probe gate and be no older than twenty-four hours before an accelerator claim can pass. Together they keep the GitHub About description, twenty-topic tag string, README badges, public package visibility, npm description and keywords, terminal social preview guidance, pull request evidence posture, issue intake language, source provenance, evidence freshness, and launch copy aligned with the README so the public face of the project stays sharp as the router evolves.
 
-MIT. See [LICENSE](LICENSE).
+ProofRoute is meant to be open source infrastructure with a shareable heartbeat. The strongest demo is not a slide or a landing page; it is a terminal capture where a real prompt is routed in under a millisecond, a local model wins when it should, a premium model wins when the task deserves it, and the exact money saved is printed in the same frame as the engineering decision.

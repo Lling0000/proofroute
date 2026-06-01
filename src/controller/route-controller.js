@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
 import { classifyIntent, estimateTokens, stableSoftmax } from './intent.js';
 
+export const ROUTING_POLICIES = Object.freeze(['balanced', 'save', 'fast', 'quality', 'local']);
+
 export class NoRouteError extends Error {
   constructor(message, details) {
     super(message);
@@ -22,22 +24,24 @@ export class RouteController {
   }
 
   route({ prompt, tokens, outputTokens, requestedModel, executableOnly = false, policy, maxCostUsd, maxLatencyMs } = {}) {
-    const cacheKey = this.cacheKey({ prompt, tokens, outputTokens, requestedModel, executableOnly, policy, maxCostUsd, maxLatencyMs });
+    const resolvedPolicy = resolvePolicy(policy ?? this.config.router?.policy);
+    const cacheKey = this.cacheKey({ prompt, tokens, outputTokens, requestedModel, executableOnly, policy: resolvedPolicy, maxCostUsd, maxLatencyMs });
     const cached = this.readCache(cacheKey);
     if (cached) return withCache(cached, { hit: true, key: cacheKey, size: this.cache.size });
     const intent = normalizeIntent(this.classifier.classify(prompt ?? ''));
-    const decision = this.routeWithIntent({ prompt, tokens, outputTokens, requestedModel, executableOnly, policy, intent, maxCostUsd, maxLatencyMs });
+    const decision = this.routeWithIntent({ prompt, tokens, outputTokens, requestedModel, executableOnly, policy: resolvedPolicy, intent, maxCostUsd, maxLatencyMs });
     this.writeCache(cacheKey, decision);
     return withCache(decision, { hit: false, key: cacheKey, size: this.cache.size });
   }
 
   async routeAsync({ prompt, tokens, outputTokens, requestedModel, executableOnly = false, policy, maxCostUsd, maxLatencyMs } = {}) {
-    const cacheKey = this.cacheKey({ prompt, tokens, outputTokens, requestedModel, executableOnly, policy, maxCostUsd, maxLatencyMs });
+    const resolvedPolicy = resolvePolicy(policy ?? this.config.router?.policy);
+    const cacheKey = this.cacheKey({ prompt, tokens, outputTokens, requestedModel, executableOnly, policy: resolvedPolicy, maxCostUsd, maxLatencyMs });
     const cached = this.readCache(cacheKey);
     if (cached) return withCache(cached, { hit: true, key: cacheKey, size: this.cache.size });
     const classify = typeof this.classifier.classifyAsync === 'function' ? this.classifier.classifyAsync.bind(this.classifier) : this.classifier.classify.bind(this.classifier);
     const intent = normalizeIntent(await classify(prompt ?? ''));
-    const decision = this.routeWithIntent({ prompt, tokens, outputTokens, requestedModel, executableOnly, policy, intent, maxCostUsd, maxLatencyMs });
+    const decision = this.routeWithIntent({ prompt, tokens, outputTokens, requestedModel, executableOnly, policy: resolvedPolicy, intent, maxCostUsd, maxLatencyMs });
     this.writeCache(cacheKey, decision);
     return withCache(decision, { hit: false, key: cacheKey, size: this.cache.size });
   }
@@ -75,6 +79,7 @@ export class RouteController {
   }
 
   routeWithIntent({ prompt, tokens, outputTokens, requestedModel, executableOnly = false, policy, intent, maxCostUsd, maxLatencyMs } = {}) {
+    const resolvedPolicy = resolvePolicy(policy ?? this.config.router?.policy);
     const inputTokens = tokens ?? estimateTokens(prompt ?? '');
     const plannedOutputTokens = normalizeOutputTokens(outputTokens, inputTokens);
     const requiredTokens = inputTokens + plannedOutputTokens;
@@ -89,7 +94,7 @@ export class RouteController {
         rejected.push(stripRejected({ model, reason: 'not_executable', requiredTokens, executable: false }));
         continue;
       }
-      const candidate = this.scoreModel({ model, intent, inputTokens, outputTokens: plannedOutputTokens, requestedModel, policy });
+      const candidate = this.scoreModel({ model, intent, inputTokens, outputTokens: plannedOutputTokens, requestedModel, policy: resolvedPolicy });
       if (withinCostBudget(maxCostUsd) && candidate.estimatedCostUsd > Number(maxCostUsd)) {
         rejected.push(stripRejected({ model, reason: 'cost_budget', requiredTokens, executable: this.canExecute(model), estimatedCostUsd: candidate.estimatedCostUsd, maxCostUsd: Number(maxCostUsd) }));
         continue;
@@ -126,6 +131,7 @@ export class RouteController {
     }, ranked[0]);
     return {
       model: chosen.model,
+      policy: resolvedPolicy,
       intent,
       inputTokens,
       outputTokens: plannedOutputTokens,
@@ -205,7 +211,7 @@ export class RouteController {
       maxLatencyMs ?? '',
       requestedModel ?? '',
       executableOnly ? 'exec' : 'all',
-      policy ?? this.config.router?.policy ?? 'balanced'
+      resolvePolicy(policy ?? this.config.router?.policy)
     ].join(':');
   }
 
@@ -227,6 +233,12 @@ export class RouteController {
   }
 }
 
+export function resolvePolicy(policy = 'balanced') {
+  const normalized = typeof policy === 'string' ? policy.toLowerCase() : policy;
+  if (normalized === 'auto') return 'balanced';
+  return ROUTING_POLICIES.includes(normalized) ? normalized : 'balanced';
+}
+
 export function policyWeights(policy = 'balanced') {
   const policies = {
     balanced: { quality: 1, cost: 0.9, latency: 0.38, local: 1 },
@@ -235,7 +247,7 @@ export function policyWeights(policy = 'balanced') {
     quality: { quality: 1.34, cost: 0.55, latency: 0.24, local: 0.72 },
     local: { quality: 0.84, cost: 1.2, latency: 0.42, local: 2.8 }
   };
-  return policies[policy] ?? policies.balanced;
+  return policies[resolvePolicy(policy)];
 }
 
 function normalizeIntent(intent) {

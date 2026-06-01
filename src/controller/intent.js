@@ -92,6 +92,7 @@ export function classifyIntent(prompt) {
   const tokens = tokenize(text);
   const lengthScore = Math.min(2.2, prompt.length / 24000);
   const features = {
+    backend: 'builtin',
     chars: prompt.length,
     tokens: estimateTokens(prompt),
     hasCodeFence: /```/.test(prompt),

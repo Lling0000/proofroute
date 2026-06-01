@@ -1,7 +1,31 @@
 import { createServer } from 'node:http';
 import { AgentRuntime, responsesInputToText } from './runtime.js';
 import { recordRouteEvent, routeEvent, telemetryPath } from './telemetry.js';
-import { RouteController } from '../controller/route-controller.js';
+import { ROUTING_POLICIES, RouteController } from '../controller/route-controller.js';
+
+const EXPOSED_PROOFROUTE_HEADERS = [
+  'x-proofroute-model',
+  'x-proofroute-requested-model',
+  'x-proofroute-model-swap',
+  'x-proofroute-policy',
+  'x-proofroute-intent',
+  'x-proofroute-saved-usd',
+  'x-proofroute-decision-ms',
+  'x-proofroute-router-overhead-pct',
+  'x-proofroute-cache',
+  'x-proofroute-stream',
+  'x-proofroute-usage-source',
+  'x-proofroute-estimated-tokens',
+  'x-proofroute-classifier-backend',
+  'x-proofroute-classifier-circuit',
+  'x-proofroute-classifier-failures',
+  'x-proofroute-fallback',
+  'x-proofroute-latency-ms',
+  'x-proofroute-actual-tokens',
+  'x-proofroute-actual-cost-usd',
+  'x-proofroute-actual-saved-usd',
+  'server-timing'
+];
 
 export function createProxyServer({ config, controller = new RouteController(config), runtime = new AgentRuntime(config), telemetryOverride, verbose = false, onTelemetryError, onRoute } = {}) {
   return createServer(async (req, res) => {
@@ -29,18 +53,24 @@ export function createProxyServer({ config, controller = new RouteController(con
       }
       const body = await readJson(req);
       const prompt = extractPrompt(body);
+      const clientModel = requestedClientModel(body);
       const routeStartedAt = performance.now();
-      const decision = await controller.routeAsync({ prompt, requestedModel: body.model, executableOnly: true, policy: requestedPolicy(body, req.headers), outputTokens: requestedOutputTokens(body), maxCostUsd: requestedMaxCostUsd(body, req.headers), maxLatencyMs: requestedMaxLatencyMs(body, req.headers) });
+      const decision = await controller.routeAsync({ prompt, requestedModel: requestedModel(body), executableOnly: true, policy: requestedPolicy(body, req.headers), outputTokens: requestedOutputTokens(body), maxCostUsd: requestedMaxCostUsd(body, req.headers), maxLatencyMs: requestedMaxLatencyMs(body, req.headers) });
       const routerDecisionMs = Math.max(0, performance.now() - routeStartedAt);
       const upstream = isResponse ? await runtime.executeResponse({ body, decision }) : isCompletion ? await runtime.executeCompletion({ body, decision }) : await runtime.executeRoutedChatCompletion({ body, decision });
       const finalDecision = upstream.decision ?? decision;
+      const modelSwap = routeModelSwap(clientModel, finalDecision.model.id);
+      const routerOverheadPct = routerOverheadPercent(routerDecisionMs, finalDecision);
       const elapsedMs = Math.max(0, performance.now() - startedAt);
       const actualUsage = extractActualUsage(upstream.body);
       const actualEconomics = actualUsage ? actualEconomicsFor(finalDecision, actualUsage, config) : {};
       const route = {
         decision: finalDecision,
+        requestedModel: clientModel,
+        modelSwap,
         status: upstream.status,
         routerDecisionMs,
+        routerOverheadPct,
         endToEndMs: elapsedMs,
         stream: Boolean(body.stream),
         fallback: upstream.fallback,
@@ -53,10 +83,22 @@ export function createProxyServer({ config, controller = new RouteController(con
       });
       if (typeof onRoute === 'function') onRoute({ ...route, upstream, telemetryWrite, request: { method: req.method, path: url.pathname } });
       res.setHeader('x-proofroute-model', finalDecision.model.id);
+      res.setHeader('x-proofroute-requested-model', headerToken(clientModel, 'none'));
+      res.setHeader('x-proofroute-model-swap', modelSwap ? 'true' : 'false');
+      res.setHeader('x-proofroute-policy', finalDecision.policy);
       res.setHeader('x-proofroute-intent', finalDecision.intent.name);
       res.setHeader('x-proofroute-saved-usd', finalDecision.economics.savingsUsd.toFixed(6));
       res.setHeader('x-proofroute-decision-ms', routerDecisionMs.toFixed(2));
+      res.setHeader('x-proofroute-router-overhead-pct', routerOverheadPct.toFixed(4));
       res.setHeader('x-proofroute-cache', finalDecision.cache?.hit ? 'hit' : 'miss');
+      res.setHeader('x-proofroute-stream', body.stream ? 'true' : 'false');
+      res.setHeader('x-proofroute-usage-source', actualUsage ? 'actual' : 'estimate');
+      res.setHeader('x-proofroute-estimated-tokens', String(finalDecision.inputTokens + finalDecision.outputTokens));
+      res.setHeader('server-timing', serverTimingHeader({ routerDecisionMs, elapsedMs }));
+      const classifierProof = classifierProofHeaders(finalDecision.intent?.features);
+      res.setHeader('x-proofroute-classifier-backend', classifierProof.backend);
+      res.setHeader('x-proofroute-classifier-circuit', classifierProof.circuit);
+      res.setHeader('x-proofroute-classifier-failures', classifierProof.failures);
       if (actualUsage) {
         res.setHeader('x-proofroute-actual-tokens', String(actualUsage.totalTokens));
         res.setHeader('x-proofroute-actual-cost-usd', actualEconomics.actualCostUsd.toFixed(6));
@@ -119,7 +161,21 @@ export function requestedOutputTokens(body) {
 }
 
 export function requestedPolicy(body, headers = {}) {
-  return body.metadata?.proofroute_policy ?? body.metadata?.policy ?? headerValue(headers, 'x-proofroute-policy');
+  return body.metadata?.proofroute_policy ?? body.metadata?.policy ?? headerValue(headers, 'x-proofroute-policy') ?? policyAlias(body.model);
+}
+
+export function requestedModel(body) {
+  const model = requestedClientModel(body);
+  return policyAlias(model) ? undefined : model;
+}
+
+export function requestedClientModel(body) {
+  const model = body?.model;
+  return typeof model === 'string' && model.trim() ? model.trim() : undefined;
+}
+
+export function routeModelSwap(requested, routed) {
+  return Boolean(requested && routed && requested !== routed);
 }
 
 export function requestedMaxCostUsd(body, headers = {}) {
@@ -164,7 +220,8 @@ function sendEmpty(res, status) {
 
 function sendRaw(res, status, headers, body, elapsedMs) {
   const safeHeaders = Object.fromEntries(Object.entries(headers ?? {}).filter(([key]) => {
-    return !['content-encoding', 'transfer-encoding', 'connection', 'keep-alive'].includes(key.toLowerCase());
+    const normalized = key.toLowerCase();
+    return !['content-encoding', 'transfer-encoding', 'connection', 'keep-alive', 'server-timing'].includes(normalized) && !normalized.startsWith('x-proofroute-');
   }));
   safeHeaders['x-proofroute-latency-ms'] = elapsedMs.toFixed(2);
   res.writeHead(status, {
@@ -248,15 +305,54 @@ async function writeStream(res, body) {
 function corsHeaders() {
   return {
     'access-control-allow-origin': '*',
+    'timing-allow-origin': '*',
     'access-control-allow-methods': 'GET,POST,OPTIONS',
     'access-control-allow-headers': 'authorization,content-type,x-proofroute-policy,x-proofroute-max-cost-usd,x-proofroute-max-latency-ms',
-    'access-control-expose-headers': 'x-proofroute-model,x-proofroute-intent,x-proofroute-saved-usd,x-proofroute-decision-ms,x-proofroute-cache,x-proofroute-fallback,x-proofroute-latency-ms,x-proofroute-actual-tokens,x-proofroute-actual-cost-usd,x-proofroute-actual-saved-usd'
+    'access-control-expose-headers': EXPOSED_PROOFROUTE_HEADERS.join(',')
   };
+}
+
+function classifierProofHeaders(features = {}) {
+  return {
+    backend: headerToken(features.backend, 'unknown'),
+    circuit: features.classifierCircuitOpen ? 'open' : 'closed',
+    failures: nonNegativeInteger(features.classifierFailures)
+  };
+}
+
+function headerToken(value, fallback) {
+  const text = String(value ?? fallback ?? '').trim();
+  const safe = text.replace(/[^\w./:-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
+  return safe || String(fallback ?? 'unknown');
+}
+
+function nonNegativeInteger(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? String(Math.floor(parsed)) : '0';
+}
+
+function serverTimingHeader({ routerDecisionMs, elapsedMs }) {
+  return `proofroute-router;dur=${routerDecisionMs.toFixed(2)}, proofroute-total;dur=${elapsedMs.toFixed(2)}`;
+}
+
+function routerOverheadPercent(routerDecisionMs, decision) {
+  const estimatedLatencyMs = Number(decision.performance?.estimatedLatencyMs);
+  return Number.isFinite(estimatedLatencyMs) && estimatedLatencyMs > 0 ? routerDecisionMs / estimatedLatencyMs * 100 : 0;
 }
 
 function headerValue(headers, key) {
   const value = headers?.[key.toLowerCase()];
   return Array.isArray(value) ? value[0] : value;
+}
+
+function policyAlias(model) {
+  if (typeof model !== 'string') return undefined;
+  const normalized = model.toLowerCase();
+  if (normalized === 'proofroute') return 'balanced';
+  const match = normalized.match(/^proofroute[/:](\w+)$/);
+  if (!match) return undefined;
+  const policy = match[1] === 'auto' ? 'balanced' : match[1];
+  return ROUTING_POLICIES.includes(policy) ? policy : undefined;
 }
 
 function isAsyncIterable(value) {
