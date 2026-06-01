@@ -111,7 +111,7 @@ PROOFROUTE_CLASSIFIER_URL=http://127.0.0.1:8788/classify node ./bin/proofroute.j
 node --test
 ```
 
-维护者侧仓库文案在 [docs/repository-profile.md](docs/repository-profile.md)，同一公共表面可以通过 `node ./bin/proofroute.js profile` 或 `npm run profile` 打印。release 侧入口是 `node ./bin/proofroute.js launch` 或 `npm run launch`，它会把仓库门面、零网络 proof、proxy smoke、隐私审计、share asset 检查和 classifier evidence 状态合并成一张 readiness card。需要把真实公网状态纳入门控时，`node ./bin/proofroute.js launch --check-public` 和 `node ./bin/proofroute.js release --preflight --core --check-public` 会检查公开 GitHub 与 npm 可见性，而不会默认修改远端或写出 proof pack。最后一层发布门禁是 `node ./bin/proofroute.js publish --check-public --check-actions` 或 `npm run publish:preflight`，它会同时检查 package metadata、npm CLI、npm pack dry-run 内容、npm publish dry-run 是否会被自动修正、npm registry 登录态、公开 GitHub 与 npm 可见性，以及最近的 GitHub Actions 证据。
+维护者侧仓库文案在 [docs/repository-profile.md](docs/repository-profile.md)，同一公共表面可以通过 `node ./bin/proofroute.js profile` 或 `npm run profile` 打印。release 侧入口是 `node ./bin/proofroute.js launch` 或 `npm run launch`，它会把仓库门面、零网络 proof、proxy smoke、隐私审计、share asset 检查和 classifier evidence 状态合并成一张 readiness card。需要把真实公网状态纳入门控时，`node ./bin/proofroute.js launch --check-public` 和 `node ./bin/proofroute.js release --preflight --core --check-public` 会检查公开 GitHub 与 npm 可见性，而不会默认修改远端或写出 proof pack。最后一层发布门禁是 `node ./bin/proofroute.js publish --check-public --check-actions` 或 `npm run publish:preflight`，它会同时检查 package metadata、npm CLI、npm pack dry-run 内容、npm publish dry-run 是否会被自动修正、npm registry 登录态、公开 GitHub 与 npm 可见性，以及最近的 GitHub Actions 证据，并输出机器可读的 `blockers` 和 `nextActions`，让 npm 登录缺失、GitHub 账号可见性限制、匿名 404 和 Actions 禁用变成明确的发布清单。
 
 ProofRoute 想成为开源基础设施里的一个高传播心跳。它最强的 demo 不是幻灯片，也不是落地页，而是一张终端截图：真实 prompt 在毫秒级被路由，本地模型在该赢的时候赢，高质量模型在值得时赢，精确节省金额和工程决策出现在同一个画面里。
 

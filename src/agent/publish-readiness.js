@@ -81,6 +81,13 @@ export async function publishReadinessReport({
   }
   const requiredPass = checks.filter((check) => check.severity !== 'advisory').every((check) => check.pass || check.skipped);
   const skippedRequired = checks.some((check) => check.severity !== 'advisory' && check.skipped);
+  const blockers = publishBlockers({ npm, account, publicFace, actions, repository, npmCommand, registry });
+  const nextActions = blockers.map((blocker) => ({
+    id: `${blocker.id}_next`,
+    forBlocker: blocker.id,
+    summary: blocker.nextAction,
+    command: blocker.command
+  }));
   return {
     kind: 'proofroute-publish-readiness-v1',
     generatedAt: new Date().toISOString(),
@@ -96,6 +103,8 @@ export async function publishReadinessReport({
     account,
     public: publicFace,
     actions,
+    blockers,
+    nextActions,
     checks
   };
 }
@@ -309,6 +318,81 @@ async function githubActionsCheck({ repo, cwd, runner, probeDispatch = false, wo
       runs: runs.ok ? undefined : commandMessage(runs)
     }
   };
+}
+
+function publishBlockers({ npm, account, publicFace, actions, repository, npmCommand, registry }) {
+  const blockers = [];
+  if (npm.auth && !npm.auth.pass && !npm.auth.skipped) {
+    blockers.push({
+      id: 'npm_auth_missing',
+      source: 'npm.auth',
+      title: 'Log into npm before publishing.',
+      detail: npm.auth.detail,
+      evidence: {
+        checkId: 'npm_auth',
+        code: npm.auth.output?.code
+      },
+      nextAction: `Run ${npmCommand} login --registry ${registry} or provide an npm automation token, then rerun proofroute publish --check-public --check-actions.`,
+      command: `${npmCommand} login --registry ${registry}`
+    });
+  }
+  if (account?.summary && !account.summary.pass) {
+    const flagged = account.blocker === 'account_flagged_as_spammy';
+    blockers.push({
+      id: flagged ? 'github_account_flagged_spammy' : 'github_account_visibility_failed',
+      source: 'account',
+      title: flagged ? 'Clear the GitHub account visibility restriction.' : 'Restore GitHub account search visibility.',
+      detail: account.summary.detail,
+      evidence: {
+        checkId: 'github_account_visibility',
+        blocker: account.blocker,
+        query: account.query
+      },
+      nextAction: flagged ? 'Open GitHub account settings and Support for Lling0000; ask GitHub to review the account-level spam or visibility restriction before expecting anonymous repo access to work.' : `Confirm that authenticated GitHub search can find ${repository} through ${account.query}, then rerun the public preflight.`,
+      supportMessage: flagged ? githubSupportMessage({ repository }) : undefined
+    });
+  }
+  if (publicFace?.status === 'fail') {
+    const ownerStatus = publicFace.github?.owner?.status;
+    const githubStatus = publicFace.github?.status;
+    const npmStatus = publicFace.npm?.status;
+    const hasNotFound = [ownerStatus, githubStatus, npmStatus].some((status) => status === 404);
+    blockers.push({
+      id: hasNotFound ? 'public_face_404' : 'public_face_failed',
+      source: 'public',
+      title: 'Make the public GitHub and npm face visible without credentials.',
+      detail: `owner ${ownerStatus ?? 'unknown'}, repository ${githubStatus ?? 'unknown'}, npm ${npmStatus ?? 'unknown'}.`,
+      evidence: {
+        checkId: 'public_face',
+        ownerStatus,
+        githubStatus,
+        npmStatus
+      },
+      nextAction: account?.blocker === 'account_flagged_as_spammy' ? 'Clear the GitHub account-level visibility blocker first, then publish the npm package and rerun profile --check-public.' : 'Verify the GitHub owner, GitHub repository, and npm package are reachable anonymously, then rerun profile --check-public.'
+    });
+  }
+  if (actions?.summary && !actions.summary.pass) {
+    const dispatchMessage = `${actions.dispatch?.stderr ?? ''} ${actions.dispatch?.message ?? ''}`;
+    const userDisabled = /Actions has been disabled for this user/i.test(dispatchMessage);
+    blockers.push({
+      id: userDisabled ? 'github_actions_disabled' : 'github_actions_not_passing',
+      source: 'actions',
+      title: userDisabled ? 'Restore account-level GitHub Actions access.' : 'Produce a passing GitHub Actions run.',
+      detail: actions.summary.detail,
+      evidence: {
+        checkId: 'github_actions',
+        dispatchCode: actions.dispatch?.code,
+        enabled: actions.permissions?.enabled,
+        recentRuns: actions.runs?.length ?? 0
+      },
+      nextAction: userDisabled ? 'Open GitHub account Actions settings or Support; repo-level Actions permissions are already enabled, so repeating repo API toggles will not fix this blocker.' : 'Run the ProofRoute CI workflow after Actions access is healthy, then rerun publish --check-actions.'
+    });
+  }
+  return blockers;
+}
+
+function githubSupportMessage({ repository }) {
+  return `My account owns ${repository}. Authenticated GitHub API shows this repository is public and private=false, but anonymous API access to the owner or repository returns 404 and authenticated repository search reports that the user is flagged as spammy. GitHub Actions repository permissions are enabled, but workflow dispatch reports that Actions has been disabled for this user. Please review the account-level visibility and Actions restrictions.`;
 }
 
 async function runNpm({ npmCommand, args, cwd, runner }) {

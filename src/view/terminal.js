@@ -259,6 +259,7 @@ export function renderPublishReadiness(report) {
   const github = report.github ? `${report.github.summary?.pass ? 'pass' : 'fail'} ${report.github.repository?.visibility ?? 'unknown'} private ${report.github.repository?.isPrivate === false ? 'no' : report.github.repository?.isPrivate === true ? 'yes' : 'unknown'}` : 'not checked';
   const account = report.account ? `${report.account.summary?.pass ? 'pass' : 'fail'}${report.account.blocker ? ` ${report.account.blocker}` : ''}` : 'not checked';
   const actions = report.actions ? `${report.actions.summary?.pass ? 'pass' : 'fail'} enabled ${report.actions.permissions?.enabled === true ? 'yes' : 'unknown'} runs ${(report.actions.runs ?? []).length}${report.actions.dispatch ? ` dispatch ${report.actions.dispatch.ok ? 'ok' : 'fail'}` : ''}` : 'not checked';
+  const blockers = (report.blockers ?? []).map((blocker) => `${MAGENTA}${blocker.id}${RESET} ${DIM}${compactText(blocker.nextAction, 112)}${RESET}`);
   return [
     title('publish readiness'),
     `${BOLD}${mark}${RESET} ${DIM}${report.package?.name}@${report.package?.version} publish preflight for package surface, npm registry auth, public visibility, and launch evidence.${RESET}`,
@@ -269,7 +270,8 @@ export function renderPublishReadiness(report) {
     `${pad('public face', 16)} ${publicFace}`,
     `${pad('actions', 16)} ${actions}`,
     '',
-    ...rows
+    ...rows,
+    ...(blockers.length > 0 ? ['', `${BOLD}next actions${RESET}`, ...blockers] : [])
   ].join('\n');
 }
 

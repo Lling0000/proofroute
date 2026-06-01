@@ -17,6 +17,8 @@ test('publish readiness passes when package, npm, auth, and Actions evidence are
   assert.equal(report.npm.publishDryRun.pass, true);
   assert.equal(report.npm.auth.pass, true);
   assert.equal(report.actions.summary.pass, true);
+  assert.deepEqual(report.blockers, []);
+  assert.deepEqual(report.nextActions, []);
   const output = renderPublishReadiness(report);
   assert.match(output, /PUBLISH READINESS/);
   assert.match(output, /npm publish dry-run/);
@@ -31,6 +33,8 @@ test('publish readiness fails when npm auth and CI evidence are missing', async 
   assert.equal(report.status, 'fail');
   assert.equal(report.checks.find((check) => check.id === 'npm_auth').pass, false);
   assert.equal(report.checks.find((check) => check.id === 'github_actions').pass, false);
+  assert.deepEqual(report.blockers.map((blocker) => blocker.id), ['npm_auth_missing', 'github_actions_not_passing']);
+  assert.deepEqual(report.nextActions.map((action) => action.forBlocker), ['npm_auth_missing', 'github_actions_not_passing']);
   assert.match(report.npm.auth.detail, /auth is missing/);
   assert.doesNotMatch(JSON.stringify(report), /NODE_AUTH_TOKEN|secret-token/);
 });
@@ -48,6 +52,7 @@ test('publish readiness can probe workflow dispatch errors explicitly', async ()
   assert.equal(report.actions.dispatch.ok, false);
   assert.match(report.actions.summary.detail, /dispatch probe failed/);
   assert.match(report.actions.summary.detail, /Actions has been disabled/);
+  assert.ok(report.blockers.some((blocker) => blocker.id === 'github_actions_disabled'));
 });
 
 test('publish readiness contrasts authenticated GitHub visibility with anonymous public face', async () => {
@@ -68,6 +73,7 @@ test('publish readiness contrasts authenticated GitHub visibility with anonymous
   assert.equal(report.checks.find((check) => check.id === 'github_authenticated').pass, true);
   assert.equal(report.checks.find((check) => check.id === 'github_account_visibility').pass, true);
   assert.equal(report.checks.find((check) => check.id === 'public_face').pass, false);
+  assert.ok(report.blockers.some((blocker) => blocker.id === 'public_face_404' && blocker.evidence.githubStatus === 404 && blocker.evidence.npmStatus === 404));
   const output = renderPublishReadiness(report);
   assert.match(output, /github auth/);
   assert.match(output, /account/);
@@ -93,9 +99,13 @@ test('publish readiness reports account-level GitHub visibility blockers', async
   assert.equal(report.account.blocker, 'account_flagged_as_spammy');
   assert.match(report.account.summary.detail, /flagged by GitHub search as spammy/);
   assert.match(report.account.output.stdout, /User flagged as spammy/);
+  assert.ok(report.blockers.some((blocker) => blocker.id === 'github_account_flagged_spammy' && /Support/.test(blocker.nextAction)));
+  assert.ok(report.blockers.some((blocker) => blocker.supportMessage?.includes('flagged as spammy')));
+  assert.ok(report.nextActions.some((action) => action.forBlocker === 'github_account_flagged_spammy'));
   assert.equal(report.checks.find((check) => check.id === 'github_account_visibility').pass, false);
   const output = renderPublishReadiness(report);
   assert.match(output, /account_flagged_as_spammy/);
+  assert.match(output, /next actions/);
 });
 
 test('publish readiness reports a missing npm CLI before package commands run', async () => {
