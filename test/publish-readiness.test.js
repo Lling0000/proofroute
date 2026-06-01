@@ -63,12 +63,39 @@ test('publish readiness contrasts authenticated GitHub visibility with anonymous
   assert.equal(report.status, 'fail');
   assert.equal(report.github.summary.pass, true);
   assert.equal(report.github.repository.visibility, 'PUBLIC');
+  assert.equal(report.account.summary.pass, true);
   assert.equal(report.public.github.owner.status, 404);
   assert.equal(report.checks.find((check) => check.id === 'github_authenticated').pass, true);
+  assert.equal(report.checks.find((check) => check.id === 'github_account_visibility').pass, true);
   assert.equal(report.checks.find((check) => check.id === 'public_face').pass, false);
   const output = renderPublishReadiness(report);
   assert.match(output, /github auth/);
+  assert.match(output, /account/);
   assert.match(output, /public face/);
+});
+
+test('publish readiness reports account-level GitHub visibility blockers', async () => {
+  const report = await publishReadinessReport({
+    checkPublic: true,
+    runner: fakePublishRunner({
+      auth: true,
+      accountSearchError: 'User flagged as spammy'
+    }),
+    fetchImpl: fakePublicFaceFetch({
+      githubOwnerStatus: 404,
+      githubStatus: 404,
+      npmStatus: 404
+    })
+  });
+  assert.equal(report.status, 'fail');
+  assert.equal(report.github.summary.pass, true);
+  assert.equal(report.account.summary.pass, false);
+  assert.equal(report.account.blocker, 'account_flagged_as_spammy');
+  assert.match(report.account.summary.detail, /flagged by GitHub search as spammy/);
+  assert.match(report.account.output.stdout, /User flagged as spammy/);
+  assert.equal(report.checks.find((check) => check.id === 'github_account_visibility').pass, false);
+  const output = renderPublishReadiness(report);
+  assert.match(output, /account_flagged_as_spammy/);
 });
 
 test('publish readiness reports a missing npm CLI before package commands run', async () => {
@@ -86,7 +113,7 @@ test('publish readiness reports a missing npm CLI before package commands run', 
   assert.equal(report.npm.auth.skipped, true);
 });
 
-function fakePublishRunner({ auth = true, actionsRuns = [], dispatchError } = {}) {
+function fakePublishRunner({ auth = true, actionsRuns = [], dispatchError, accountSearchError, accountSearchItems = [{ full_name: 'Lling0000/proofroute' }] } = {}) {
   return async (command, args) => {
     if (command === 'npm' && args[0] === '--version') {
       return { stdout: '11.16.0\n', stderr: '' };
@@ -102,6 +129,18 @@ function fakePublishRunner({ auth = true, actionsRuns = [], dispatchError } = {}
       const error = new Error('npm auth missing');
       error.code = 1;
       error.stderr = 'npm error code ENEEDAUTH\nnpm error need auth This command requires you to be logged in.\n';
+      throw error;
+    }
+    if (command === 'gh' && args[0] === 'api' && args.includes('/search/repositories')) {
+      if (!accountSearchError) return { stdout: `${JSON.stringify({ total_count: accountSearchItems.length, items: accountSearchItems })}\n`, stderr: '' };
+      const error = new Error('GitHub account visibility failed');
+      error.code = 1;
+      error.stdout = `${JSON.stringify({
+        message: 'Validation Failed',
+        errors: [{ message: accountSearchError, resource: 'Search', field: 'q', code: 'invalid' }],
+        status: '422'
+      })}\n`;
+      error.stderr = 'gh: Validation Failed (HTTP 422)\n';
       throw error;
     }
     if (command === 'gh' && args[0] === 'api') {

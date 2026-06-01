@@ -60,9 +60,12 @@ export async function publishReadinessReport({
   }
   let publicFace;
   let github;
+  let account;
   if (checkPublic) {
     github = await githubAuthenticatedRepositoryCheck({ repo: repository, cwd, runner });
     checks.push(github.summary);
+    account = await githubAccountVisibilityCheck({ repo: repository, cwd, runner });
+    checks.push(account.summary);
     publicFace = await publicRepositoryFaceReport({ packagePath, fetchImpl });
     checks.push(checkFromStatus({
       id: 'public_face',
@@ -90,6 +93,7 @@ export async function publishReadinessReport({
     },
     npm,
     github,
+    account,
     public: publicFace,
     actions,
     checks
@@ -213,6 +217,51 @@ async function githubAuthenticatedRepositoryCheck({ repo, cwd, runner }) {
   };
 }
 
+async function githubAccountVisibilityCheck({ repo, cwd, runner }) {
+  const [owner, name] = String(repo ?? '').split('/');
+  if (!owner || !name) {
+    const summary = checkFromStatus({
+      id: 'github_account_visibility',
+      label: 'GitHub account visibility',
+      pass: false,
+      detail: 'GitHub owner and repository name are unknown, so account visibility cannot be checked.'
+    });
+    return { summary, blocker: 'missing_repository' };
+  }
+  const query = `${name} user:${owner}`;
+  const result = await runCommandSafe({
+    command: 'gh',
+    args: ['api', '--method', 'GET', '/search/repositories', '-f', `q=${query}`],
+    cwd,
+    runner
+  });
+  const payload = parseJsonFromCommand(result);
+  const errors = (payload?.errors ?? []).map((error) => error.message).filter(Boolean);
+  const spammy = errors.some((message) => /flagged as spammy/i.test(message));
+  const items = Array.isArray(payload?.items) ? payload.items : [];
+  const matched = items.some((item) => String(item.full_name ?? '').toLowerCase() === String(repo).toLowerCase());
+  const totalCount = Number(payload?.total_count);
+  const searchOk = result.ok && !spammy;
+  const pass = searchOk && matched;
+  const blocker = spammy ? 'account_flagged_as_spammy' : result.ok && !matched ? 'repository_not_search_discoverable' : result.ok ? undefined : 'account_visibility_probe_failed';
+  const summary = checkFromStatus({
+    id: 'github_account_visibility',
+    label: 'GitHub account visibility',
+    pass,
+    detail: pass ? `authenticated GitHub search found ${repo} through ${query}.` : spammy ? `${owner} is flagged by GitHub search as spammy; anonymous public visibility will remain blocked until the account restriction is cleared.` : result.ok ? `authenticated GitHub search succeeded for ${query} but did not return ${repo}; total matches ${Number.isFinite(totalCount) ? totalCount : 'unknown'}.` : `GitHub account visibility probe failed for ${query}: ${commandMessage(result)}.`
+  });
+  return {
+    summary,
+    owner,
+    query,
+    blocker,
+    errors,
+    totalCount: Number.isFinite(totalCount) ? totalCount : undefined,
+    matched,
+    output: summarizeCommand(result)
+  };
+}
+
 async function githubActionsCheck({ repo, cwd, runner, probeDispatch = false, workflow = 'ProofRoute CI', ref = 'main' }) {
   if (!repo) {
     const summary = checkFromStatus({
@@ -318,6 +367,22 @@ function skippedCheck(id, label, detail) {
 
 function commandMessage(result) {
   return compact(`${result.stderr || result.stdout || result.message || `exit ${result.code ?? 'unknown'}`}`);
+}
+
+function parseJsonFromCommand(result) {
+  for (const value of [result.stdout, result.stderr, result.message]) {
+    const text = String(value ?? '').trim();
+    if (!text) continue;
+    const start = text.indexOf('{');
+    const end = text.lastIndexOf('}');
+    if (start === -1 || end === -1 || end < start) continue;
+    try {
+      return JSON.parse(text.slice(start, end + 1));
+    } catch {
+      continue;
+    }
+  }
+  return undefined;
 }
 
 function summarizeCommand(result) {

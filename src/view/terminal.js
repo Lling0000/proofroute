@@ -257,6 +257,7 @@ export function renderPublishReadiness(report) {
   });
   const publicFace = report.public ? `${report.public.status} owner ${report.public.github?.owner?.status ?? 'unknown'} github ${report.public.github?.status ?? 'unknown'} npm ${report.public.npm?.status ?? 'unknown'}` : 'not checked';
   const github = report.github ? `${report.github.summary?.pass ? 'pass' : 'fail'} ${report.github.repository?.visibility ?? 'unknown'} private ${report.github.repository?.isPrivate === false ? 'no' : report.github.repository?.isPrivate === true ? 'yes' : 'unknown'}` : 'not checked';
+  const account = report.account ? `${report.account.summary?.pass ? 'pass' : 'fail'}${report.account.blocker ? ` ${report.account.blocker}` : ''}` : 'not checked';
   const actions = report.actions ? `${report.actions.summary?.pass ? 'pass' : 'fail'} enabled ${report.actions.permissions?.enabled === true ? 'yes' : 'unknown'} runs ${(report.actions.runs ?? []).length}${report.actions.dispatch ? ` dispatch ${report.actions.dispatch.ok ? 'ok' : 'fail'}` : ''}` : 'not checked';
   return [
     title('publish readiness'),
@@ -264,6 +265,7 @@ export function renderPublishReadiness(report) {
     `${pad('npm command', 16)} ${report.npm?.command ?? 'npm'}`,
     `${pad('registry', 16)} ${report.npm?.registry ?? 'https://registry.npmjs.org/'}`,
     `${pad('github auth', 16)} ${github}`,
+    `${pad('account', 16)} ${account}`,
     `${pad('public face', 16)} ${publicFace}`,
     `${pad('actions', 16)} ${actions}`,
     '',
