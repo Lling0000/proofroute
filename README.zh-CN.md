@@ -10,22 +10,23 @@ ProofRoute 是为 Vibe Coding 准备的隐形大模型路由器。它以 CLI-fir
 
 ![ProofRoute terminal proof](docs/proofroute-terminal.svg)
 
+第一条命令必须足够靠前，因为这个项目只有在配置之前就证明自己，才配得上开发者继续读下去。克隆仓库后直接运行 demo，就能在没有外部网络调用、没有 API key、没有托管 dashboard、没有 npm 发布状态、没有 provider 配置的情况下，看到本地路由证明、预估节省、p95 Controller 延迟、速度提升、意图准确率和路由分布。
+
+```sh
+node ./bin/proofroute.js demo
+```
+
 ProofRoute 的架构遵循 Agent-View-Controller。Controller 负责本地意图识别、token 估算、上下文匹配、成本建模、延迟建模和数值稳定的 Softmax 排名。Agent 负责异步 provider 执行、OpenAI 兼容转发、Ollama 适配、fallback 执行和基准编排。View 负责终端原生 proof card、route trace、Markdown receipt、连接卡片、模型目录、统计视图、调优输出和 classifier receipt。这个边界让路由决策既快又可解释，也让未来的 GPU classifier 能替换 Controller 内部实现，而不破坏代理、证据和终端体验。
 
 默认体验刻意保持零配置。开发者可以克隆仓库，直接运行本地 demo，在没有 API key、没有网络调用、没有 provider 配置的情况下看到路由证明。真正启动代理后，现有 SDK、编辑器扩展、CLI 工具和 Agent 只需要把 OpenAI Base URL 指向 ProofRoute，就能继续调用熟悉的 chat completions 接口，而路由器会在后台根据意图、上下文、价格和延迟选择更合适的模型。
 
 ## 快速开始
 
-最快的第一步是运行 demo。这个命令不会访问外部网络，也不需要 provider 凭证，它会直接展示路由决策、p95 Controller 延迟、预估节省、速度提升和路由分布。
-
-```sh
-node ./bin/proofroute.js demo
-```
-
-安装或链接包之后，开发者应该记住的命令是 `proofroute demo`。在克隆仓库里，如果本机有 npm，`npm run demo` 指向同一个零网络 proof；在 npm 公网可见性被发布门禁证明之前，最诚实的复制运行路径仍然是从这个仓库直接执行 Node 命令。
+安装或链接包之后，开发者应该记住的命令是 `proofroute demo`。在克隆仓库里，如果本机有 npm，`npm run demo` 指向同一个零网络 proof；在 npm 公网可见性被发布门禁证明之前，最诚实的复制运行路径仍然是从这个仓库直接执行 Node 命令，而第二条证明路径是单 prompt 的 trace receipt，它会展示选中模型为什么击败 runner-up。
 
 ```sh
 proofroute demo
+node ./bin/proofroute.js route --trace --prompt "Refactor this webhook, explain the bug, and write a regression test."
 ```
 
 ## 证据包

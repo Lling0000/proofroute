@@ -12,6 +12,11 @@ export function renderHelp() {
   return [
     `${BOLD}proofroute${RESET} ${DIM}CLI-first model routing for people who would rather ship than stare at model menus.${RESET}`,
     '',
+    `${BOLD}First proof${RESET}`,
+    '  node ./bin/proofroute.js demo',
+    '  node ./bin/proofroute.js route --trace --prompt "why this model?"',
+    '  node ./bin/proofroute.js connect --port 8787',
+    '',
     `${BOLD}Usage${RESET}`,
     '  proofroute route --prompt "fix this flaky test"',
     '  proofroute route --tokens 8000 --output-tokens 1200 --prompt "audit this plan"',

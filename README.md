@@ -10,22 +10,23 @@ It is built for developers who do not want to pause a Vibe Coding session to com
 
 ![ProofRoute terminal proof](docs/proofroute-terminal.svg)
 
+The first command is deliberately this early because the project earns attention only when it proves itself before setup work begins. Run the demo from a fresh clone to see the local routing proof, estimated savings, p95 Controller latency, speed lift, intent accuracy, and route mix without a network call, API key, hosted dashboard, npm publish state, or provider configuration.
+
+```sh
+node ./bin/proofroute.js demo
+```
+
 The architecture follows Agent-View-Controller because routing has to be fast, explainable, and easy to harden. The Controller owns local intent recognition, token estimation, context fit checks, cost modeling, latency modeling, and numerically stable Softmax ranking. The Agent owns asynchronous provider execution, OpenAI-compatible forwarding, Ollama adaptation, fallback execution, proxy lifecycle, and benchmark orchestration. The View owns terminal-native proof cards, route traces, Markdown receipts, connection cards, model maps, privacy reports, launch checks, and classifier receipts.
 
 The default experience is intentionally zero configuration. A developer can clone the repository, run the demo, and see a local proof card before any network call, API key, provider setup, or hosted dashboard exists. When the proxy is started, existing SDKs, editor extensions, CLIs, and coding agents can point their OpenAI base URL at ProofRoute and continue using familiar endpoints while the router quietly swaps in the model that fits the task.
 
 ## Quick Start
 
-The fastest first run is the demo. It makes no network call, requires no provider credential, and immediately shows the route decision, p95 Controller latency, estimated savings, speed lift, and route mix that define the product.
-
-```sh
-node ./bin/proofroute.js demo
-```
-
-The package-facing memory hook is `proofroute demo` after the checkout is linked locally or the npm package is publicly available. Until public npm visibility is proven by the publish preflight, the honest copy-paste path is direct Node execution from this repository.
+The package-facing memory hook is `proofroute demo` after the checkout is linked locally or the npm package is publicly available. Until public npm visibility is proven by the publish preflight, the honest copy-paste path is direct Node execution from this repository, and the second proof path is the single-prompt trace receipt that shows why the selected model beat the runner-up.
 
 ```sh
 proofroute demo
+node ./bin/proofroute.js route --trace --prompt "Refactor this webhook, explain the bug, and write a regression test."
 ```
 
 ## Proof Packs
