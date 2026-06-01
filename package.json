@@ -1,7 +1,7 @@
 {
   "name": "proofroute",
   "version": "0.1.0",
-  "description": "CLI-first, zero-dependency OpenAI-compatible LLM router/proxy that routes each prompt to the cheapest fast-enough local or cloud model and proves speed, savings, and prompt-free privacy in your terminal.",
+  "description": "CLI-first, zero-dependency OpenAI-compatible LLM router/proxy for coding agents that picks the cheapest fast-enough local or cloud model and proves speed, savings, and prompt-free privacy in your terminal.",
   "type": "module",
   "homepage": "https://github.com/Lling0000/proofroute#readme",
   "repository": {

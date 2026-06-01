@@ -365,6 +365,62 @@ async function githubActionsCheck({ repo, cwd, runner, probeDispatch = false, wo
 
 function publishBlockers({ npm, account, publicFace, actions, repository, npmCommand, registry }) {
   const blockers = [];
+  if (npm.cli && !npm.cli.pass) {
+    blockers.push({
+      id: 'npm_cli_missing',
+      source: 'npm.cli',
+      title: 'Install or point ProofRoute at an executable npm CLI.',
+      detail: npm.cli.detail,
+      evidence: {
+        checkId: 'npm_cli',
+        code: npm.cli.output?.code
+      },
+      nextAction: `Run ${npmCommand} --version, install npm if needed, or rerun with proofroute publish --npm /path/to/npm --check-public --check-actions.`,
+      command: `${npmCommand} --version`
+    });
+  }
+  if (npm.metadata && !npm.metadata.pass) {
+    blockers.push({
+      id: 'npm_package_metadata_failed',
+      source: 'npm.metadata',
+      title: 'Fix package metadata before npm publication.',
+      detail: npm.metadata.detail,
+      evidence: {
+        checkId: 'package_metadata'
+      },
+      nextAction: 'Update package.json so the package is public, has both CLI bins, ships both README surfaces, and uses publishConfig access public, then rerun proofroute publish.',
+      command: 'node ./bin/proofroute.js publish --json'
+    });
+  }
+  if (npm.pack && !npm.pack.pass && !npm.pack.skipped) {
+    blockers.push({
+      id: 'npm_package_surface_failed',
+      source: 'npm.pack',
+      title: 'Fix the npm tarball surface before release.',
+      detail: npm.pack.detail,
+      evidence: {
+        checkId: 'npm_pack',
+        missing: npm.pack.missing ?? [],
+        code: npm.pack.output?.code
+      },
+      nextAction: `Run ${npmCommand} pack --json --dry-run and make the required ProofRoute CLI, source, docs, README, license, security, and env template files appear in the package before publishing.`,
+      command: `${npmCommand} pack --json --dry-run`
+    });
+  }
+  if (npm.publishDryRun && !npm.publishDryRun.pass && !npm.publishDryRun.skipped) {
+    blockers.push({
+      id: 'npm_publish_dry_run_failed',
+      source: 'npm.publishDryRun',
+      title: 'Make npm publish dry-run clean before release.',
+      detail: npm.publishDryRun.detail,
+      evidence: {
+        checkId: 'npm_publish_dry_run',
+        code: npm.publishDryRun.output?.code
+      },
+      nextAction: `Run ${npmCommand} publish --dry-run --access public --registry ${registry}, fix any npm errors or metadata auto-corrections, then rerun proofroute publish.`,
+      command: `${npmCommand} publish --dry-run --access public --registry ${registry}`
+    });
+  }
   if (npm.auth && !npm.auth.pass && !npm.auth.skipped) {
     blockers.push({
       id: 'npm_auth_missing',

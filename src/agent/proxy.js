@@ -9,13 +9,22 @@ const EXPOSED_PROOFROUTE_HEADERS = [
   'x-proofroute-model-swap',
   'x-proofroute-policy',
   'x-proofroute-intent',
+  'x-proofroute-runner-up',
   'x-proofroute-saved-usd',
+  'x-proofroute-savings-pct',
+  'x-proofroute-speedup',
   'x-proofroute-decision-ms',
   'x-proofroute-router-overhead-pct',
   'x-proofroute-cache',
   'x-proofroute-stream',
   'x-proofroute-usage-source',
   'x-proofroute-estimated-tokens',
+  'x-proofroute-context-window',
+  'x-proofroute-context-use-pct',
+  'x-proofroute-estimated-cost-usd',
+  'x-proofroute-baseline-cost-usd',
+  'x-proofroute-estimated-latency-ms',
+  'x-proofroute-baseline-latency-ms',
   'x-proofroute-classifier-backend',
   'x-proofroute-classifier-circuit',
   'x-proofroute-classifier-failures',
@@ -87,13 +96,22 @@ export function createProxyServer({ config, controller = new RouteController(con
       res.setHeader('x-proofroute-model-swap', modelSwap ? 'true' : 'false');
       res.setHeader('x-proofroute-policy', finalDecision.policy);
       res.setHeader('x-proofroute-intent', finalDecision.intent.name);
+      res.setHeader('x-proofroute-runner-up', headerToken(runnerUpModel(finalDecision), 'none'));
       res.setHeader('x-proofroute-saved-usd', finalDecision.economics.savingsUsd.toFixed(6));
+      res.setHeader('x-proofroute-savings-pct', percentHeader(finalDecision.economics.savingsPct));
+      res.setHeader('x-proofroute-speedup', ratioHeader(finalDecision.performance.speedup));
       res.setHeader('x-proofroute-decision-ms', routerDecisionMs.toFixed(2));
       res.setHeader('x-proofroute-router-overhead-pct', routerOverheadPct.toFixed(4));
       res.setHeader('x-proofroute-cache', finalDecision.cache?.hit ? 'hit' : 'miss');
       res.setHeader('x-proofroute-stream', body.stream ? 'true' : 'false');
       res.setHeader('x-proofroute-usage-source', actualUsage ? 'actual' : 'estimate');
       res.setHeader('x-proofroute-estimated-tokens', String(finalDecision.inputTokens + finalDecision.outputTokens));
+      res.setHeader('x-proofroute-context-window', String(finalDecision.model.contextWindow));
+      res.setHeader('x-proofroute-context-use-pct', contextUsePercent(finalDecision).toFixed(4));
+      res.setHeader('x-proofroute-estimated-cost-usd', finalDecision.economics.estimatedCostUsd.toFixed(6));
+      res.setHeader('x-proofroute-baseline-cost-usd', finalDecision.economics.baselineCostUsd.toFixed(6));
+      res.setHeader('x-proofroute-estimated-latency-ms', finalDecision.performance.estimatedLatencyMs.toFixed(2));
+      res.setHeader('x-proofroute-baseline-latency-ms', finalDecision.performance.baselineLatencyMs.toFixed(2));
       res.setHeader('server-timing', serverTimingHeader({ routerDecisionMs, elapsedMs }));
       const classifierProof = classifierProofHeaders(finalDecision.intent?.features);
       res.setHeader('x-proofroute-classifier-backend', classifierProof.backend);
@@ -287,6 +305,27 @@ function usageCost(model, usage) {
 function usageNumber(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
+}
+
+function runnerUpModel(decision) {
+  return decision.ranked?.find((candidate) => candidate.model !== decision.model.id)?.model;
+}
+
+function contextUsePercent(decision) {
+  const requiredTokens = Number(decision.inputTokens) + Number(decision.outputTokens);
+  const contextWindow = Number(decision.model?.contextWindow);
+  if (!Number.isFinite(requiredTokens) || !Number.isFinite(contextWindow) || contextWindow <= 0) return 0;
+  return Math.max(0, requiredTokens / contextWindow * 100);
+}
+
+function percentHeader(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? (parsed * 100).toFixed(4) : '0.0000';
+}
+
+function ratioHeader(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed.toFixed(4) : '0.0000';
 }
 
 async function writeStream(res, body) {

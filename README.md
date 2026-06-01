@@ -25,7 +25,7 @@ The default experience is intentionally zero configuration. A developer can clon
 The package-facing memory hook is `proofroute demo` after the checkout is linked locally or the npm package is publicly available. Until public npm visibility is proven by the publish preflight, the honest copy-paste path is direct Node execution from this repository, and the second proof path is the single-prompt trace receipt that shows why the selected model beat the runner-up.
 
 ```sh
-proofroute demo
+node ./bin/proofroute.js demo
 node ./bin/proofroute.js route --trace --prompt "Refactor this webhook, explain the bug, and write a regression test."
 ```
 
@@ -60,7 +60,7 @@ node ./bin/proofroute.js connect --port 8787
 eval "$(node ./bin/proofroute.js connect --shell sh)"
 ```
 
-The transparent proxy serves `/v1/chat/completions`, `/v1/completions`, `/v1/responses`, `/v1/models`, and `/ready`. It exposes browser-readable proof headers for final model, requested model, model swap state, routing policy, intent, decision latency, router overhead, cache state, classifier backend, classifier circuit state, fallback, estimated savings, actual token count, and actual savings whenever the upstream returns usage metadata.
+The transparent proxy serves `/v1/chat/completions`, `/v1/completions`, `/v1/responses`, `/v1/models`, and `/ready` as an OpenAI-compatible Base URL proxy rather than a network `CONNECT` proxy. It exposes browser-readable proof headers for final model, requested model, model swap state, routing policy, intent, runner-up model, context window, context use, estimated route cost, baseline cost, savings percentage, speedup, estimated latency, baseline latency, decision latency, router overhead, cache state, classifier backend, classifier circuit state, fallback, actual token count, and actual savings whenever the upstream returns usage metadata.
 
 ```sh
 node ./bin/proofroute.js proxy --port 8787 --config examples/router.json
@@ -92,7 +92,7 @@ node ./bin/proofroute.js init > router.json
 
 For local OpenAI-compatible gateways, `node ./bin/proofroute.js init --preset local-openai > router.json` emits the same executable shape as `examples/local-openai-router.json`, including `requiresApiKey: false`, local policy bias, and a command-backed classifier example. The faster environment-only path is `PROOFROUTE_LOCAL_OPENAI_BASE_URL`, with optional model, context, latency, and throughput variables that let a private LM Studio, vLLM, or model server become a routable zero-price candidate without a JSON file.
 
-The proxy writes `.proofroute/events.jsonl` as a privacy-preserving routing ledger by default. It records timestamp, requested model, final model, model swap state, provider, locality, resolved policy, intent, classifier backend, confidence, token estimates, cost estimates, savings, speedup, decision latency, router overhead, end-to-end latency, streaming mode, and status code. When a non-streaming upstream returns usage metadata, it can also record actual input tokens, output tokens, total tokens, routed cost, baseline cost, and actual savings, but it does not store prompt or completion text.
+The proxy writes `.proofroute/events.jsonl` as a privacy-preserving routing ledger by default. It records timestamp, requested model, final model, model swap state, provider, locality, resolved policy, intent, classifier backend, confidence, token estimates, context window, context use, runner-up model, baseline model, candidate count, rejected count, rejected reasons, cost estimates, baseline cost, savings, speedup, baseline latency, decision latency, router overhead, end-to-end latency, streaming mode, and status code. When a non-streaming upstream returns usage metadata, it can also record actual input tokens, output tokens, total tokens, routed cost, baseline cost, and actual savings, but it does not store prompt or completion text.
 
 ## Classifier Acceleration
 

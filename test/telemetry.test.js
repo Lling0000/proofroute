@@ -40,6 +40,14 @@ test('route telemetry records routing evidence without prompt text', async () =>
     assert.equal(events[0].classifierBackend, 'builtin-circuit-open');
     assert.equal(events[0].classifierCircuitOpen, true);
     assert.equal(events[0].classifierFailures, 3);
+    assert.equal(events[0].requiredTokens, 34);
+    assert.equal(events[0].contextWindow, 8192);
+    assert.ok(Math.abs(events[0].contextUsePct - 0.4150390625) < 0.000001);
+    assert.equal(events[0].runnerUpModel, 'gpt-premium');
+    assert.equal(events[0].baselineModel, 'gpt-premium');
+    assert.equal(events[0].candidateCount, 2);
+    assert.equal(events[0].rejectedCount, 1);
+    assert.equal(events[0].rejectedReasons, 'context_window');
     assert.equal(events[0].stream, true);
     assert.equal(events[0].cacheHit, false);
     assert.equal(events[0].fallbackUsed, false);
@@ -49,6 +57,8 @@ test('route telemetry records routing evidence without prompt text', async () =>
     assert.equal(events[0].actualInputTokens, 11);
     assert.equal(events[0].actualOutputTokens, 7);
     assert.equal(events[0].actualSavingsUsd, 0.02);
+    assert.equal(events[0].baselineCostUsd, 0.03);
+    assert.equal(events[0].baselineLatencyMs, 240);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -149,7 +159,8 @@ test('stats command exposes recent prompt-free route receipts', async () => {
         model: {
           id: 'gpt-latest',
           provider: 'openai',
-          local: false
+          local: false,
+          contextWindow: 128000
         },
         intent: {
           name: 'writing'
@@ -177,6 +188,10 @@ test('stats command exposes recent prompt-free route receipts', async () => {
     assert.equal(report.recent[0].policy, 'fast');
     assert.equal(report.recent[0].intent, 'writing');
     assert.equal(report.recent[0].stream, true);
+    assert.equal(report.recent[0].runnerUpModel, 'llama3.2:3b');
+    assert.equal(report.recent[0].candidateCount, 2);
+    assert.equal(report.recent[0].rejectedReasons, 'context_window');
+    assert.ok(report.recent[0].contextUsePct > 0);
     assert.doesNotMatch(result.stdout, /secret production prompt/);
   } finally {
     await rm(dir, { recursive: true, force: true });
@@ -466,7 +481,8 @@ function fakeDecision() {
     model: {
       id: 'llama3.2:3b',
       provider: 'local',
-      local: true
+      local: true,
+      contextWindow: 8192
     },
     intent: {
       name: 'code',
@@ -482,12 +498,34 @@ function fakeDecision() {
     outputTokens: 21,
     economics: {
       estimatedCostUsd: 0,
+      baselineCostUsd: 0.03,
       savingsUsd: 0.03
     },
     performance: {
       speedup: 1.7,
-      estimatedLatencyMs: 120
+      estimatedLatencyMs: 120,
+      baselineLatencyMs: 240
     },
+    ranked: [
+      {
+        model: 'llama3.2:3b',
+        contextWindow: 8192,
+        estimatedCostUsd: 0,
+        estimatedLatencyMs: 120
+      },
+      {
+        model: 'gpt-premium',
+        contextWindow: 128000,
+        estimatedCostUsd: 0.03,
+        estimatedLatencyMs: 240
+      }
+    ],
+    rejected: [
+      {
+        model: 'tiny-local',
+        reason: 'context_window'
+      }
+    ],
     prompt: 'secret production prompt'
   };
 }

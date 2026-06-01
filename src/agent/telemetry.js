@@ -59,6 +59,7 @@ export function routeEvent({ decision, requestedModel, modelSwap, status, elapse
   const classifier = decision.intent?.features ?? {};
   const requested = requestedModel ?? decision.requestedModel;
   const estimatedLatencyMs = decision.performance?.estimatedLatencyMs;
+  const receipt = routeReceiptFields(decision);
   return sanitizeEvent({
     ts: new Date().toISOString(),
     model: decision.model.id,
@@ -74,7 +75,16 @@ export function routeEvent({ decision, requestedModel, modelSwap, status, elapse
     confidence: decision.confidence,
     inputTokens: decision.inputTokens,
     outputTokens: decision.outputTokens,
+    requiredTokens: receipt.requiredTokens,
+    contextWindow: receipt.contextWindow,
+    contextUsePct: receipt.contextUsePct,
+    runnerUpModel: receipt.runnerUpModel,
+    baselineModel: receipt.baselineModel,
+    candidateCount: receipt.candidateCount,
+    rejectedCount: receipt.rejectedCount,
+    rejectedReasons: receipt.rejectedReasons,
     estimatedCostUsd: decision.economics.estimatedCostUsd,
+    baselineCostUsd: decision.economics.baselineCostUsd,
     savingsUsd: decision.economics.savingsUsd,
     actualInputTokens: actualUsage?.inputTokens,
     actualOutputTokens: actualUsage?.outputTokens,
@@ -84,6 +94,7 @@ export function routeEvent({ decision, requestedModel, modelSwap, status, elapse
     actualSavingsUsd,
     speedup: decision.performance.speedup,
     estimatedLatencyMs: decision.performance.estimatedLatencyMs,
+    baselineLatencyMs: decision.performance.baselineLatencyMs,
     routerDecisionMs: decisionMs,
     routerLatencyMs: decisionMs,
     routerOverheadPct: routerOverheadPct ?? routerOverheadPercent(decisionMs, estimatedLatencyMs),
@@ -158,6 +169,14 @@ export function recentRouteEvents(events, limit = 5) {
       classifierBackend: String(event.classifierBackend ?? 'unknown'),
       classifierCircuitOpen: Boolean(event.classifierCircuitOpen),
       savingsUsd: bestSavings(event),
+      baselineCostUsd: finite(event.baselineCostUsd),
+      runnerUpModel: String(event.runnerUpModel ?? ''),
+      candidateCount: finite(event.candidateCount),
+      rejectedCount: finite(event.rejectedCount),
+      rejectedReasons: String(event.rejectedReasons ?? ''),
+      requiredTokens: finite(event.requiredTokens),
+      contextWindow: finite(event.contextWindow),
+      contextUsePct: finite(event.contextUsePct),
       actualTotalTokens: finite(event.actualTotalTokens),
       routerLatencyMs: finite(event.routerLatencyMs),
       routerOverheadPct: routerOverheadForEvent(event),
@@ -219,7 +238,16 @@ function sanitizeEvent(event) {
     confidence: finite(event.confidence),
     inputTokens: finite(event.inputTokens),
     outputTokens: finite(event.outputTokens),
+    requiredTokens: finite(event.requiredTokens),
+    contextWindow: finite(event.contextWindow),
+    contextUsePct: finite(event.contextUsePct),
+    runnerUpModel: safeText(event.runnerUpModel),
+    baselineModel: safeText(event.baselineModel),
+    candidateCount: finite(event.candidateCount),
+    rejectedCount: finite(event.rejectedCount),
+    rejectedReasons: safeText(event.rejectedReasons),
     estimatedCostUsd: finite(event.estimatedCostUsd),
+    baselineCostUsd: finite(event.baselineCostUsd),
     savingsUsd: finite(event.savingsUsd),
     actualInputTokens: finite(event.actualInputTokens),
     actualOutputTokens: finite(event.actualOutputTokens),
@@ -229,6 +257,7 @@ function sanitizeEvent(event) {
     actualSavingsUsd: finite(event.actualSavingsUsd),
     speedup: finite(event.speedup),
     estimatedLatencyMs: finite(event.estimatedLatencyMs),
+    baselineLatencyMs: finite(event.baselineLatencyMs),
     routerLatencyMs: finite(event.routerLatencyMs),
     routerDecisionMs: finite(event.routerDecisionMs ?? event.routerLatencyMs),
     routerOverheadPct: finite(event.routerOverheadPct),
@@ -243,6 +272,38 @@ function sanitizeEvent(event) {
 function finite(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;
+}
+
+function routeReceiptFields(decision) {
+  const ranked = Array.isArray(decision.ranked) ? decision.ranked : [];
+  const rejected = Array.isArray(decision.rejected) ? decision.rejected : [];
+  const inputTokens = finite(decision.inputTokens);
+  const outputTokens = finite(decision.outputTokens);
+  const requiredTokens = inputTokens + outputTokens;
+  const contextWindow = finite(decision.model?.contextWindow);
+  const runnerUp = ranked.find((candidate) => candidate.model !== decision.model.id);
+  const baseline = ranked.reduce((best, candidate) => {
+    if (!best || finite(candidate.estimatedCostUsd) > finite(best.estimatedCostUsd)) return candidate;
+    return best;
+  }, ranked[0]);
+  return {
+    requiredTokens,
+    contextWindow,
+    contextUsePct: contextWindow > 0 ? requiredTokens / contextWindow * 100 : 0,
+    runnerUpModel: runnerUp?.model,
+    baselineModel: baseline?.model,
+    candidateCount: ranked.length || 1,
+    rejectedCount: rejected.length,
+    rejectedReasons: compactRejectedReasons(rejected)
+  };
+}
+
+function compactRejectedReasons(rejected) {
+  return Array.from(new Set(rejected.map((entry) => safeText(entry.reason)).filter(Boolean))).slice(0, 8).join(',');
+}
+
+function safeText(value) {
+  return String(value ?? '').replace(/[^\w./:-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 160);
 }
 
 function sum(events, key) {

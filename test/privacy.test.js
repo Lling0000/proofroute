@@ -36,6 +36,8 @@ test('privacy proof passes on the prompt-free routing ledger', async () => {
     assert.equal(report.parseErrorCount, 0);
     assert.ok(report.scannedKeys > 0);
     assert.ok(report.allowedEvidenceKeys.includes('actualTotalTokens'));
+    assert.ok(report.allowedEvidenceKeys.includes('runnerUpModel'));
+    assert.ok(report.allowedEvidenceKeys.includes('contextUsePct'));
     const output = renderPrivacy(report);
     assert.match(output, /PRIVACY PROOF/);
     assert.match(output, /PASS/);

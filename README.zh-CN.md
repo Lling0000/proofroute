@@ -25,7 +25,7 @@ ProofRoute 的架构遵循 Agent-View-Controller。Controller 负责本地意图
 安装或链接包之后，开发者应该记住的命令是 `proofroute demo`。在克隆仓库里，如果本机有 npm，`npm run demo` 指向同一个零网络 proof；在 npm 公网可见性被发布门禁证明之前，最诚实的复制运行路径仍然是从这个仓库直接执行 Node 命令，而第二条证明路径是单 prompt 的 trace receipt，它会展示选中模型为什么击败 runner-up。
 
 ```sh
-proofroute demo
+node ./bin/proofroute.js demo
 node ./bin/proofroute.js route --trace --prompt "Refactor this webhook, explain the bug, and write a regression test."
 ```
 
@@ -60,7 +60,7 @@ node ./bin/proofroute.js connect --port 8787
 eval "$(node ./bin/proofroute.js connect --shell sh)"
 ```
 
-启动透明代理后，现有 OpenAI 兼容客户端可以把 base URL 指向 `http://127.0.0.1:8787/v1`。ProofRoute 支持 `/v1/chat/completions`、`/v1/completions`、`/v1/responses`、`/v1/models` 和 `/ready`，并通过浏览器可读 response headers 暴露最终模型、请求模型、模型替换状态、策略、意图、决策延迟、router overhead、缓存状态、classifier backend、fallback、预估节省、实际 token 和实际节省。
+启动透明代理后，现有 OpenAI 兼容客户端可以把 base URL 指向 `http://127.0.0.1:8787/v1`。这里的透明代理指的是 OpenAI-compatible Base URL 代理，而不是网络层 `CONNECT` 代理。ProofRoute 支持 `/v1/chat/completions`、`/v1/completions`、`/v1/responses`、`/v1/models` 和 `/ready`，并通过浏览器可读 response headers 暴露最终模型、请求模型、模型替换状态、策略、意图、runner-up、上下文窗口、上下文占用、预估路由成本、baseline 成本、节省比例、速度提升、预估延迟、baseline 延迟、决策延迟、router overhead、缓存状态、classifier backend、fallback、实际 token 和实际节省。
 
 ```sh
 node ./bin/proofroute.js proxy --port 8787 --config examples/router.json
@@ -92,7 +92,7 @@ node ./bin/proofroute.js init > router.json
 
 从 LM Studio、vLLM 或其他本地 OpenAI 兼容服务开始时，`node ./bin/proofroute.js init --preset local-openai > router.json` 会生成与 `examples/local-openai-router.json` 一致的可执行本地网关形态，包括 `requiresApiKey: false`、本地策略偏置和 command-backed classifier 示例。环境变量 `PROOFROUTE_LOCAL_OPENAI_BASE_URL` 可以在不写 JSON 的情况下追加一个零价格本地 OpenAI 兼容模型，`PROOFROUTE_LOCAL_OPENAI_MODEL`、`PROOFROUTE_LOCAL_OPENAI_CONTEXT_WINDOW`、`PROOFROUTE_LOCAL_OPENAI_LATENCY_MS` 和 `PROOFROUTE_LOCAL_OPENAI_TOKENS_PER_SECOND` 可以让生成模型贴近真实网关。
 
-ProofRoute 默认把隐私边界放在本地。路由缓存使用 prompt fingerprint，不把 prompt 文本落盘；代理默认写入 `.proofroute/events.jsonl`，其中保存的是时间戳、请求模型、最终模型、模型替换状态、provider、本地性、策略、意图、classifier backend、confidence、token 估算、成本估算、节省、速度提升、决策延迟、router overhead、端到端延迟、streaming 模式和状态码。非 streaming 上游返回 usage metadata 时，ledger 还可以记录实际 input tokens、output tokens、total tokens、实际路由成本、baseline 成本和实际节省，但不会保存 prompt 或 completion 文本。
+ProofRoute 默认把隐私边界放在本地。路由缓存使用 prompt fingerprint，不把 prompt 文本落盘；代理默认写入 `.proofroute/events.jsonl`，其中保存的是时间戳、请求模型、最终模型、模型替换状态、provider、本地性、策略、意图、classifier backend、confidence、token 估算、上下文窗口、上下文占用、runner-up 模型、baseline 模型、候选数量、被过滤数量、过滤原因、成本估算、baseline 成本、节省、速度提升、baseline 延迟、决策延迟、router overhead、端到端延迟、streaming 模式和状态码。非 streaming 上游返回 usage metadata 时，ledger 还可以记录实际 input tokens、output tokens、total tokens、实际路由成本、baseline 成本和实际节省，但不会保存 prompt 或 completion 文本。
 
 ## Classifier 加速
 

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { compareGithubRepositoryState, desiredGithubRepositoryState, githubRepositoryStateReport, publicRepositoryFaceReport, readmeBadgeReport, repositoryProfileReport } from '../src/agent/repository-profile.js';
@@ -12,10 +12,12 @@ test('repository profile keeps public metadata executable and shareable', async 
   assert.equal(report.github.topics.length, 20);
   assert.equal(report.github.topics[0], 'llm-router');
   assert.match(report.github.description, /OpenAI-compatible LLM router/);
+  assert.match(report.github.description, /coding agents/);
   assert.equal(report.github.homepage, 'https://github.com/Lling0000/proofroute#readme');
   assert.equal(report.github.repository, 'Lling0000/proofroute');
   assert.equal(report.npm.name, 'proofroute');
   assert.ok(report.npm.keywords.includes('vibe-coding'));
+  assert.match(report.npm.description, /coding agents/);
   assert.equal(report.social.badges.length, 7);
   assert.equal(report.social.badges[0].id, 'proof');
   assert.match(report.social.shortPitch, /zero-dependency OpenAI-compatible proxy/);
@@ -53,6 +55,33 @@ test('repository profile keeps public metadata executable and shareable', async 
   assert.match(output, /launch ready/);
   assert.match(output, /proof gate/);
   assert.match(renderHelp(), /proofroute profile/);
+});
+
+test('README first screen stays copy-pasteable from a source checkout', async () => {
+  const english = await readFile(new URL('../README.md', import.meta.url), 'utf8');
+  const chinese = await readFile(new URL('../README.zh-CN.md', import.meta.url), 'utf8');
+  assertReadmeFirstRun(english, 'Quick Start');
+  assertReadmeFirstRun(chinese, '快速开始');
+});
+
+test('npm keyword front matter keeps high-intent discovery tags near the top', async () => {
+  const report = await repositoryProfileReport();
+  const priority = [
+    'llm-router',
+    'ai-router',
+    'inference-router',
+    'openai-compatible',
+    'transparent-proxy',
+    'local-llm',
+    'local-first',
+    'coding-agent',
+    'vibe-coding',
+    'cost-optimization',
+    'prompt-privacy'
+  ];
+  const indexes = priority.map((keyword) => report.npm.keywords.indexOf(keyword));
+  assert.ok(indexes.every((index) => index >= 0));
+  assert.ok(Math.max(...indexes) < 16);
 });
 
 test('profile command emits machine-readable repository face metadata', () => {
@@ -277,6 +306,16 @@ test('GitHub repository face sync replaces About metadata and topics', async () 
   assert.ok(remote.calls.some((call) => call.method === 'PUT' && call.path === '/topics'));
   assert.doesNotMatch(JSON.stringify(report), /secret-token/);
 });
+
+function assertReadmeFirstRun(readme, heading) {
+  const firstScreen = readme.split(/\r?\n/).slice(0, 28).join('\n');
+  assert.match(firstScreen, /docs\/proofroute-terminal\.svg/);
+  assert.match(firstScreen, /node \.\/bin\/proofroute\.js demo/);
+  const quickStart = readme.match(new RegExp(`## ${heading}[\\s\\S]*?\`\`\`sh\\n([\\s\\S]*?)\\n\`\`\``));
+  assert.ok(quickStart);
+  assert.match(quickStart[1], /node \.\/bin\/proofroute\.js demo/);
+  assert.doesNotMatch(quickStart[1], /^proofroute demo$/m);
+}
 
 function fakeGithubRemote(initial) {
   const state = {

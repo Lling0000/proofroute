@@ -299,18 +299,45 @@ test('publish readiness reports a missing npm CLI before package commands run', 
   assert.equal(report.npm.pack.skipped, true);
   assert.equal(report.npm.publishDryRun.skipped, true);
   assert.equal(report.npm.auth.skipped, true);
+  assert.deepEqual(report.blockers.map((blocker) => blocker.id), ['npm_cli_missing']);
+  assert.equal(report.nextActions[0].forBlocker, 'npm_cli_missing');
 });
 
-function fakePublishRunner({ auth = true, actionsRuns = [], dispatchError, accountSearchError, accountSearchItems = [{ full_name: 'Lling0000/proofroute' }] } = {}) {
+test('publish readiness turns npm package surface and dry-run failures into actions', async () => {
+  const missingReadme = await publishReadinessReport({
+    runner: fakePublishRunner({
+      auth: true,
+      packReport: fakePackReport({ omit: ['README.zh-CN.md'] })
+    })
+  });
+  assert.equal(missingReadme.status, 'fail');
+  assert.equal(missingReadme.npm.pack.pass, false);
+  assert.deepEqual(missingReadme.npm.pack.missing, ['README.zh-CN.md']);
+  assert.ok(missingReadme.blockers.some((blocker) => blocker.id === 'npm_package_surface_failed' && blocker.evidence.missing.includes('README.zh-CN.md')));
+  assert.ok(missingReadme.nextActions.some((action) => action.forBlocker === 'npm_package_surface_failed'));
+
+  const autoCorrected = await publishReadinessReport({
+    runner: fakePublishRunner({
+      auth: true,
+      publishStderr: 'npm notice package errors corrected automatically during dry-run'
+    })
+  });
+  assert.equal(autoCorrected.status, 'fail');
+  assert.equal(autoCorrected.npm.publishDryRun.pass, false);
+  assert.ok(autoCorrected.blockers.some((blocker) => blocker.id === 'npm_publish_dry_run_failed'));
+  assert.ok(autoCorrected.nextActions.some((action) => action.forBlocker === 'npm_publish_dry_run_failed'));
+});
+
+function fakePublishRunner({ auth = true, actionsRuns = [], dispatchError, accountSearchError, accountSearchItems = [{ full_name: 'Lling0000/proofroute' }], packReport = fakePackReport(), publishStderr = 'npm notice Publishing to https://registry.npmjs.org/ with tag latest and public access (dry-run)\n' } = {}) {
   return async (command, args) => {
     if (command === 'npm' && args[0] === '--version') {
       return { stdout: '11.16.0\n', stderr: '' };
     }
     if (command === 'npm' && args[0] === 'pack') {
-      return { stdout: `${JSON.stringify([fakePackReport()])}\n`, stderr: '' };
+      return { stdout: `${JSON.stringify([packReport])}\n`, stderr: '' };
     }
     if (command === 'npm' && args[0] === 'publish') {
-      return { stdout: '+ proofroute@0.1.0\n', stderr: 'npm notice Publishing to https://registry.npmjs.org/ with tag latest and public access (dry-run)\n' };
+      return { stdout: '+ proofroute@0.1.0\n', stderr: publishStderr };
     }
     if (command === 'npm' && args[0] === 'whoami') {
       if (auth) return { stdout: 'proofroute-maintainer\n', stderr: '' };
@@ -403,7 +430,7 @@ function textResponse(body, status) {
   };
 }
 
-function fakePackReport() {
+function fakePackReport({ omit = [] } = {}) {
   const files = [
     'bin/proofroute.js',
     'bin/proofroute-classifier.js',
@@ -417,7 +444,7 @@ function fakePackReport() {
     'SECURITY.md',
     'LICENSE',
     '.env.example'
-  ];
+  ].filter((path) => !omit.includes(path));
   return {
     name: 'proofroute',
     version: '0.1.0',

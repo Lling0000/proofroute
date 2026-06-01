@@ -711,6 +711,10 @@ export function renderSmoke(report) {
   if (report.cors?.exposeHeaders) rows.splice(6, 0, `${pad('browser proof', 16)} ${report.cors.exposeHeaders.includes('x-proofroute-model') ? 'readable' : 'hidden'}`);
   if (report.response.headers?.cache) rows.splice(6, 0, `${pad('proxy cache', 16)} ${report.response.headers.cache}`);
   if (report.response.headers?.requestedModel) rows.splice(7, 0, `${pad('model swap', 16)} ${report.response.headers.requestedModel}->${report.response.headers.model} ${report.response.headers.modelSwap ?? 'false'}`);
+  if (report.response.headers?.runnerUp) rows.splice(7, 0, `${pad('runner-up', 16)} ${report.response.headers.runnerUp}`);
+  if (report.response.headers?.contextUsePct) rows.splice(7, 0, `${pad('context use', 16)} ${percent(Number(report.response.headers.contextUsePct))} of ${compactTokens(Number(report.response.headers.contextWindow ?? 0))}`);
+  if (report.response.headers?.estimatedCostUsd) rows.splice(7, 0, `${pad('route cost', 16)} ${money(Number(report.response.headers.estimatedCostUsd))} of ${money(Number(report.response.headers.baselineCostUsd ?? 0))} baseline`);
+  if (report.response.headers?.speedup) rows.splice(7, 0, `${pad('speed proof', 16)} ${Number(report.response.headers.speedup).toFixed(2)}x, saved ${percent(Number(report.response.headers.savingsPct ?? 0))}`);
   if (report.response.headers?.routerOverheadPct) rows.splice(7, 0, `${pad('route overhead', 16)} ${percent(report.response.headers.routerOverheadPct)}`);
   if (report.response.headers?.usageSource) rows.splice(7, 0, `${pad('usage proof', 16)} ${report.response.headers.usageSource} ${report.response.headers.stream === 'true' ? 'stream' : 'buffer'} est:${report.response.headers.estimatedTokens ?? '0'}`);
   if (report.response.headers?.serverTiming) rows.splice(7, 0, `${pad('devtools timing', 16)} ${report.response.headers.serverTiming}`);
@@ -838,13 +842,16 @@ export function renderStats(report) {
     const place = route.local ? 'local' : 'cloud';
     const tokens = route.actualTotalTokens > 0 ? String(route.actualTotalTokens) : 'est';
     const routed = route.modelSwap && route.requestedModel ? `${compactText(route.requestedModel, 14)}->${compactText(route.model, 14)}` : route.model;
-    const flags = [route.modelSwap ? 'model-swap' : '', route.stream ? 'stream' : '', route.fallbackUsed ? 'fallback' : '', route.classifierCircuitOpen ? 'classifier-circuit' : ''].filter(Boolean).join(',');
-    return `${pad(compactTime(route.ts), 10)} ${pad(routed, 29)} ${pad(route.policy, 8)} ${pad(route.intent, 13)} ${pad(place, 6)} ${pad(route.classifierBackend, 16)} ${pad(money(route.savingsUsd), 10)} ${pad(tokens, 6)} ${pad(ms(route.routerLatencyMs), 10)} ${pad(String(route.status), 6)} ${flags}`;
+    const runnerUp = route.runnerUpModel ? `runner-up:${compactText(route.runnerUpModel, 14)}` : '';
+    const rejected = route.rejectedCount > 0 ? `rejected:${route.rejectedReasons || route.rejectedCount}` : '';
+    const flags = [route.modelSwap ? 'model-swap' : '', route.stream ? 'stream' : '', route.fallbackUsed ? 'fallback' : '', route.classifierCircuitOpen ? 'classifier-circuit' : '', runnerUp, rejected].filter(Boolean).join(',');
+    const context = route.contextWindow > 0 ? percent(route.contextUsePct) : 'n/a';
+    return `${pad(compactTime(route.ts), 10)} ${pad(routed, 29)} ${pad(route.policy, 8)} ${pad(route.intent, 13)} ${pad(place, 6)} ${pad(route.classifierBackend, 16)} ${pad(context, 8)} ${pad(money(route.savingsUsd), 10)} ${pad(tokens, 6)} ${pad(ms(route.routerLatencyMs), 10)} ${pad(String(route.status), 6)} ${flags}`;
   });
   const recentBlock = recentRows.length > 0 ? [
     '',
     `${BOLD}latest routes${RESET}`,
-    `${pad('time', 10)} ${pad('route', 29)} ${pad('policy', 8)} ${pad('intent', 13)} ${pad('place', 6)} ${pad('classifier', 16)} ${pad('saved', 10)} ${pad('tokens', 6)} ${pad('router', 10)} status flags`,
+    `${pad('time', 10)} ${pad('route', 29)} ${pad('policy', 8)} ${pad('intent', 13)} ${pad('place', 6)} ${pad('classifier', 16)} ${pad('context', 8)} ${pad('saved', 10)} ${pad('tokens', 6)} ${pad('router', 10)} status flags`,
     ...recentRows
   ] : [];
   const costRows = summary.meteredRequests > 0 ? [

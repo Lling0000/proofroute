@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 
-const githubDescription = 'CLI-first OpenAI-compatible LLM router/proxy that routes prompts to the cheapest fast-enough model and proves speed, savings, and prompt-free privacy.';
+const githubDescription = 'CLI-first OpenAI-compatible LLM router/proxy for coding agents that picks the cheapest fast-enough model and proves speed, savings, and prompt-free privacy.';
 
 const githubTopics = [
   'llm-router',

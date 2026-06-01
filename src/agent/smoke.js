@@ -101,7 +101,7 @@ async function runProxySmokeTest({ prompt, policy }) {
     const decision = routed?.decision ?? await controller.routeAsync({ prompt, executableOnly: true, policy });
     const routerDecisionMs = positiveNumber(response.headers.get('x-proofroute-decision-ms')) ?? routed?.routerDecisionMs ?? 0.01;
     const exposeHeaders = preflight.headers.get('access-control-expose-headers') ?? '';
-    const ok = preflight.status === 204 && exposeHeaders.includes('x-proofroute-model') && exposeHeaders.includes('x-proofroute-requested-model') && exposeHeaders.includes('x-proofroute-model-swap') && exposeHeaders.includes('x-proofroute-policy') && exposeHeaders.includes('x-proofroute-classifier-backend') && exposeHeaders.includes('x-proofroute-actual-tokens') && response.status >= 200 && response.status < 300 && upstream.requests.length === 1 && upstream.requests[0].model === decision.model.id && response.headers.get('x-proofroute-model') === decision.model.id;
+    const ok = preflight.status === 204 && exposeHeaders.includes('x-proofroute-model') && exposeHeaders.includes('x-proofroute-requested-model') && exposeHeaders.includes('x-proofroute-model-swap') && exposeHeaders.includes('x-proofroute-policy') && exposeHeaders.includes('x-proofroute-runner-up') && exposeHeaders.includes('x-proofroute-context-use-pct') && exposeHeaders.includes('x-proofroute-speedup') && exposeHeaders.includes('x-proofroute-classifier-backend') && exposeHeaders.includes('x-proofroute-actual-tokens') && response.status >= 200 && response.status < 300 && upstream.requests.length === 1 && upstream.requests[0].model === decision.model.id && response.headers.get('x-proofroute-model') === decision.model.id;
     if (routed?.telemetryWrite) await routed.telemetryWrite;
     return {
       status: ok ? 'pass' : 'fail',
@@ -132,14 +132,23 @@ async function runProxySmokeTest({ prompt, policy }) {
           modelSwap: response.headers.get('x-proofroute-model-swap'),
           policy: response.headers.get('x-proofroute-policy'),
           intent: response.headers.get('x-proofroute-intent'),
+          runnerUp: response.headers.get('x-proofroute-runner-up'),
           cache: response.headers.get('x-proofroute-cache'),
           stream: response.headers.get('x-proofroute-stream'),
           usageSource: response.headers.get('x-proofroute-usage-source'),
           estimatedTokens: response.headers.get('x-proofroute-estimated-tokens'),
+          contextWindow: response.headers.get('x-proofroute-context-window'),
+          contextUsePct: response.headers.get('x-proofroute-context-use-pct'),
           classifierBackend: response.headers.get('x-proofroute-classifier-backend'),
           classifierCircuit: response.headers.get('x-proofroute-classifier-circuit'),
           classifierFailures: response.headers.get('x-proofroute-classifier-failures'),
           savedUsd: response.headers.get('x-proofroute-saved-usd'),
+          savingsPct: response.headers.get('x-proofroute-savings-pct'),
+          speedup: response.headers.get('x-proofroute-speedup'),
+          estimatedCostUsd: response.headers.get('x-proofroute-estimated-cost-usd'),
+          baselineCostUsd: response.headers.get('x-proofroute-baseline-cost-usd'),
+          estimatedLatencyMs: response.headers.get('x-proofroute-estimated-latency-ms'),
+          baselineLatencyMs: response.headers.get('x-proofroute-baseline-latency-ms'),
           routerOverheadPct: response.headers.get('x-proofroute-router-overhead-pct'),
           actualTokens: response.headers.get('x-proofroute-actual-tokens'),
           actualCostUsd: response.headers.get('x-proofroute-actual-cost-usd'),
