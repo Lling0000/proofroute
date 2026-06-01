@@ -58,7 +58,7 @@ export function renderHelp() {
     '  proofroute publish --check-public --check-actions --probe-actions-dispatch',
     '  proofroute publish --check-public --check-actions --probe-actions-dispatch --support-note',
     '  proofroute publish --check-public --check-actions --probe-actions-dispatch --support-pack proofroute-publish-support-pack',
-    '  proofroute publish --npm /tmp/proofroute-npm-cli/bin/npm-cli.js --check-public',
+    '  proofroute publish --npm /path/to/npm-cli.js --check-public',
     '  proofroute smoke',
     '  proofroute smoke --proxy',
     '  proofroute smoke --proxy --matrix',
@@ -271,12 +271,16 @@ export function renderPublishReadiness(report) {
   const github = report.github ? `${report.github.summary?.pass ? 'pass' : 'fail'} ${report.github.repository?.visibility ?? 'unknown'} private ${report.github.repository?.isPrivate === false ? 'no' : report.github.repository?.isPrivate === true ? 'yes' : 'unknown'}` : 'not checked';
   const account = report.account ? `${report.account.summary?.pass ? 'pass' : 'fail'}${report.account.blocker ? ` ${report.account.blocker}` : ''}` : 'not checked';
   const actions = report.actions ? `${report.actions.summary?.pass ? 'pass' : 'fail'} enabled ${report.actions.permissions?.enabled === true ? 'yes' : 'unknown'} runs ${(report.actions.runs ?? []).length}${report.actions.dispatch ? ` dispatch ${report.actions.dispatch.ok ? 'ok' : 'fail'}` : ''}` : 'not checked';
+  const npmEvidence = renderNpmPublishEvidence(report.npm?.evidence);
+  const localEvidence = renderPublishLocalEvidence(report.summary);
   const supportPack = report.supportPack ? `${report.supportPack.status ?? report.status ?? 'unknown'} ${report.supportPack.outDir ?? 'proofroute-publish-support-pack'} files ${(report.supportPack.files ?? []).length}` : undefined;
   const blockers = (report.blockers ?? []).map((blocker) => `${MAGENTA}${blocker.id}${RESET} ${DIM}${compactText(blocker.nextAction, 112)}${RESET}`);
   return [
     title('publish readiness'),
     `${BOLD}${mark}${RESET} ${DIM}${report.package?.name}@${report.package?.version} publish preflight for package surface, npm registry auth, public visibility, and launch evidence.${RESET}`,
     `${pad('npm command', 16)} ${report.npm?.command ?? 'npm'}`,
+    `${pad('npm evidence', 16)} ${npmEvidence}`,
+    `${pad('local evidence', 16)} ${localEvidence}`,
     `${pad('registry', 16)} ${report.npm?.registry ?? 'https://registry.npmjs.org/'}`,
     `${pad('github auth', 16)} ${github}`,
     `${pad('account', 16)} ${account}`,
@@ -294,6 +298,8 @@ export function renderPublishSupportNote(report) {
   const nextActions = report.nextActions ?? [];
   const supportMessages = blockers.map((blocker) => redactSupportText(blocker.supportMessage)).filter(Boolean);
   const evidence = blockers.map((blocker) => `${redactSupportText(blocker.id)}: ${redactSupportText(blocker.detail)}`);
+  const npmEvidence = supportNoteNpmEvidence(report.npm?.evidence);
+  const localEvidence = supportNoteLocalEvidence(report.summary);
   const actionLines = nextActions.map((action) => {
     const command = action.command ? ` Command: ${redactSupportText(action.command)}` : '';
     return `${redactSupportText(action.forBlocker)}: ${redactSupportText(action.summary)}${command}`;
@@ -307,6 +313,8 @@ export function renderPublishSupportNote(report) {
     `Anonymous public face state is ${redactSupportText(report.public?.status ?? 'not checked')}.`,
     `GitHub account visibility blocker is ${redactSupportText(report.account?.blocker ?? 'not detected')}.`,
     `GitHub Actions state is ${report.actions?.summary?.pass ? 'passing' : report.actions ? 'not ready' : 'not checked'}.`,
+    `Npm evidence is ${npmEvidence}.`,
+    `Local publish evidence is ${localEvidence}.`,
     '',
     'Blockers',
     ...(evidence.length > 0 ? evidence : ['No publish blockers were detected by this run.']),
@@ -315,6 +323,39 @@ export function renderPublishSupportNote(report) {
     ...(actionLines.length > 0 ? actionLines : ['No next actions are required by this run.']),
     ...(supportMessages.length > 0 ? ['', 'Support message', ...supportMessages] : [])
   ].join('\n');
+}
+
+function renderNpmPublishEvidence(evidence) {
+  if (!evidence) return 'not attached';
+  const version = evidence.version ? `npm ${evidence.version}` : `cli ${evidence.cli ?? 'unknown'}`;
+  const pack = evidence.package ? `${evidence.package.filename ?? 'package'} files ${evidence.package.entryCount ?? 'unknown'} size ${compactBytes(evidence.package.size)} unpacked ${compactBytes(evidence.package.unpackedSize)}` : 'package unknown';
+  const missing = evidence.requiredFilesMissing === 0 ? 'required ok' : `required missing ${evidence.requiredFilesMissing ?? 'unknown'}`;
+  return compactText(`${version}, pack ${evidence.pack ?? 'unknown'}, ${pack}, ${missing}, dry-run ${evidence.publishDryRun ?? 'unknown'}, auth ${evidence.auth ?? 'unknown'}`, 132);
+}
+
+function renderPublishLocalEvidence(summary) {
+  if (!summary) return 'not summarized';
+  const remaining = summary.blockerIds?.length ? summary.blockerIds.join(', ') : 'none';
+  return compactText(`${summary.localEvidence ?? 'unknown'}; remaining scope ${summary.remainingBlockerScope ?? 'unknown'}; blockers ${remaining}`, 132);
+}
+
+function supportNoteNpmEvidence(evidence) {
+  if (!evidence) return 'not attached';
+  const pack = evidence.package;
+  return redactSupportText(`command ${evidence.command ?? 'unknown'}, version ${evidence.version ?? 'unknown'}, pack ${evidence.pack ?? 'unknown'}, package ${pack?.filename ?? 'unknown'} with ${pack?.entryCount ?? 'unknown'} files, required missing ${evidence.requiredFilesMissing ?? 'unknown'} of ${evidence.requiredFilesChecked ?? 'unknown'}, dry-run ${evidence.publishDryRun ?? 'unknown'}, auth ${evidence.auth ?? 'unknown'}`);
+}
+
+function supportNoteLocalEvidence(summary) {
+  if (!summary) return 'not summarized';
+  return redactSupportText(`${summary.localEvidence ?? 'unknown'} with remaining scope ${summary.remainingBlockerScope ?? 'unknown'}, operator blockers ${(summary.operatorBlockerIds ?? []).join(', ') || 'none'}, external blockers ${(summary.externalBlockerIds ?? []).join(', ') || 'none'}, and local blockers ${(summary.localFixableBlockerIds ?? []).join(', ') || 'none'}`);
+}
+
+function compactBytes(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 'unknown';
+  if (number >= 1024 * 1024) return `${(number / 1024 / 1024).toFixed(2)}mb`;
+  if (number >= 1024) return `${(number / 1024).toFixed(1)}kb`;
+  return `${number}b`;
 }
 
 function releaseSourceLine(git) {

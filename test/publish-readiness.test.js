@@ -21,11 +21,18 @@ test('publish readiness passes when package, npm, auth, and Actions evidence are
   assert.equal(report.npm.pack.pass, true);
   assert.equal(report.npm.publishDryRun.pass, true);
   assert.equal(report.npm.auth.pass, true);
+  assert.equal(report.npm.evidence.version, '11.16.0');
+  assert.equal(report.npm.evidence.pack, 'pass');
+  assert.equal(report.npm.evidence.requiredFilesMissing, 0);
+  assert.equal(report.summary.localEvidence, 'pass');
+  assert.equal(report.summary.remainingBlockerScope, 'none');
   assert.equal(report.actions.summary.pass, true);
   assert.deepEqual(report.blockers, []);
   assert.deepEqual(report.nextActions, []);
   const output = renderPublishReadiness(report);
   assert.match(output, /PUBLISH READINESS/);
+  assert.match(output, /npm evidence/);
+  assert.match(output, /local evidence/);
   assert.match(output, /npm publish dry-run/);
   assert.match(output, /GitHub Actions/);
 });
@@ -39,6 +46,9 @@ test('publish readiness fails when npm auth and CI evidence are missing', async 
   assert.equal(report.checks.find((check) => check.id === 'npm_auth').pass, false);
   assert.equal(report.checks.find((check) => check.id === 'github_actions').pass, false);
   assert.deepEqual(report.blockers.map((blocker) => blocker.id), ['npm_auth_missing', 'github_actions_not_passing']);
+  assert.equal(report.blockers.find((blocker) => blocker.id === 'npm_auth_missing').scope, 'operator_auth');
+  assert.equal(report.summary.localEvidence, 'pass');
+  assert.equal(report.summary.remainingBlockerScope, 'external_or_operator');
   assert.deepEqual(report.nextActions.map((action) => action.forBlocker), ['npm_auth_missing', 'github_actions_not_passing']);
   assert.match(report.npm.auth.detail, /auth is missing/);
   assert.doesNotMatch(JSON.stringify(report), /NODE_AUTH_TOKEN|secret-token/);
@@ -58,6 +68,8 @@ test('publish readiness can probe workflow dispatch errors explicitly', async ()
   assert.match(report.actions.summary.detail, /dispatch probe failed/);
   assert.match(report.actions.summary.detail, /Actions has been disabled/);
   assert.ok(report.blockers.some((blocker) => blocker.id === 'github_actions_disabled'));
+  assert.ok(report.blockers.some((blocker) => blocker.id === 'github_actions_disabled' && blocker.supportMessage?.includes('account-level Actions restriction')));
+  assert.match(renderPublishSupportNote(report), /Actions has been disabled for this user/);
 });
 
 test('publish readiness contrasts authenticated GitHub visibility with anonymous public face', async () => {
@@ -104,6 +116,8 @@ test('publish readiness reports account-level GitHub visibility blockers', async
   assert.equal(report.account.blocker, 'account_flagged_as_spammy');
   assert.match(report.account.summary.detail, /flagged by GitHub search as spammy/);
   assert.match(report.account.output.stdout, /User flagged as spammy/);
+  assert.equal(report.blockers.find((blocker) => blocker.id === 'github_account_flagged_spammy').scope, 'external_platform');
+  assert.equal(report.summary.remainingBlockerScope, 'external_or_operator');
   assert.ok(report.blockers.some((blocker) => blocker.id === 'github_account_flagged_spammy' && /Support/.test(blocker.nextAction)));
   assert.ok(report.blockers.some((blocker) => blocker.supportMessage?.includes('flagged as spammy')));
   assert.ok(report.nextActions.some((action) => action.forBlocker === 'github_account_flagged_spammy'));
@@ -114,6 +128,8 @@ test('publish readiness reports account-level GitHub visibility blockers', async
   const supportNote = renderPublishSupportNote(report);
   assert.match(supportNote, /My account owns Lling0000\/proofroute/);
   assert.match(supportNote, /flagged as spammy/);
+  assert.match(supportNote, /Npm evidence is command npm, version 11\.16\.0/);
+  assert.match(supportNote, /Local publish evidence is pass with remaining scope external_or_operator/);
   assert.doesNotMatch(supportNote, /Actions has been disabled for this user/);
   assert.doesNotMatch(supportNote, /PUBLISH READINESS|\x1b\[/);
   assert.doesNotMatch(supportNote, /NODE_AUTH_TOKEN|secret-token/);
@@ -299,6 +315,9 @@ test('publish readiness reports a missing npm CLI before package commands run', 
   assert.equal(report.npm.pack.skipped, true);
   assert.equal(report.npm.publishDryRun.skipped, true);
   assert.equal(report.npm.auth.skipped, true);
+  assert.equal(report.npm.evidence.cli, 'fail');
+  assert.equal(report.npm.evidence.pack, 'skipped');
+  assert.equal(report.summary.localEvidence, 'fail');
   assert.deepEqual(report.blockers.map((blocker) => blocker.id), ['npm_cli_missing']);
   assert.equal(report.nextActions[0].forBlocker, 'npm_cli_missing');
 });
@@ -326,6 +345,26 @@ test('publish readiness turns npm package surface and dry-run failures into acti
   assert.equal(autoCorrected.npm.publishDryRun.pass, false);
   assert.ok(autoCorrected.blockers.some((blocker) => blocker.id === 'npm_publish_dry_run_failed'));
   assert.ok(autoCorrected.nextActions.some((action) => action.forBlocker === 'npm_publish_dry_run_failed'));
+});
+
+test('publish readiness redacts command output before JSON reports expose it', async () => {
+  const report = await publishReadinessReport({
+    runner: async (command, args) => {
+      if (command === 'npm' && args[0] === '--version') return { stdout: '11.16.0\n', stderr: '' };
+      if (command === 'npm' && args[0] === 'pack') return { stdout: `${JSON.stringify([fakePackReport()])}\n`, stderr: '' };
+      if (command === 'npm' && args[0] === 'publish') return { stdout: '+ proofroute@0.1.0\n', stderr: '' };
+      if (command === 'npm' && args[0] === 'whoami') {
+        const error = new Error('auth failed with NODE_AUTH_TOKEN=secret-token at /Users/alice/.npm/_logs/debug.log');
+        error.code = 1;
+        error.stderr = 'npm error auth failed at https://user:pass@registry.npmjs.org/?_authToken=secret-token Authorization: Bearer sk-secret-production-key /Users/alice/.npm/_logs/debug.log';
+        throw error;
+      }
+      throw new Error(`unexpected command ${command} ${args.join(' ')}`);
+    }
+  });
+  const encoded = JSON.stringify(report);
+  assert.match(encoded, /<redacted>|<redacted-secret>|<local-path>|sk-<redacted>/);
+  assert.doesNotMatch(encoded, /secret-token|user:pass|sk-secret-production-key|\/Users\/alice|Authorization: Bearer [^<]/);
 });
 
 function fakePublishRunner({ auth = true, actionsRuns = [], dispatchError, accountSearchError, accountSearchItems = [{ full_name: 'Lling0000/proofroute' }], packReport = fakePackReport(), publishStderr = 'npm notice Publishing to https://registry.npmjs.org/ with tag latest and public access (dry-run)\n' } = {}) {
@@ -436,8 +475,14 @@ function fakePackReport({ omit = [] } = {}) {
     'bin/proofroute-classifier.js',
     'src/agent/classifier-evidence.js',
     'src/agent/launch-readiness.js',
+    'src/agent/publish-readiness.js',
     'src/agent/release-pack.js',
     'src/agent/repository-profile.js',
+    'scripts/check-prose-docs.js',
+    'docs/repository-profile.md',
+    'docs/proofroute-terminal.svg',
+    'docs/proofroute-classifier.svg',
+    'docs/proofroute-classifier-benchmark.svg',
     'README.md',
     'README.zh-CN.md',
     'CONTRIBUTING.md',
@@ -450,6 +495,9 @@ function fakePackReport({ omit = [] } = {}) {
     version: '0.1.0',
     filename: 'proofroute-0.1.0.tgz',
     entryCount: files.length,
+    size: 146988,
+    unpackedSize: 632228,
+    integrity: 'sha512-proofroute',
     files: files.map((path) => ({ path }))
   };
 }

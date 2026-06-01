@@ -12,8 +12,14 @@ const requiredPackageFiles = [
   'bin/proofroute-classifier.js',
   'src/agent/classifier-evidence.js',
   'src/agent/launch-readiness.js',
+  'src/agent/publish-readiness.js',
   'src/agent/release-pack.js',
   'src/agent/repository-profile.js',
+  'scripts/check-prose-docs.js',
+  'docs/repository-profile.md',
+  'docs/proofroute-terminal.svg',
+  'docs/proofroute-classifier.svg',
+  'docs/proofroute-classifier-benchmark.svg',
   'README.md',
   'README.zh-CN.md',
   'CONTRIBUTING.md',
@@ -60,6 +66,7 @@ export async function publishReadinessReport({
     npm.auth = skippedCheck('npm_auth', 'npm auth', 'npm CLI is unavailable.');
     checks.push(npm.pack, npm.publishDryRun, npm.auth);
   }
+  npm.evidence = npmEvidenceSummary(npm);
   let publicFace;
   let github;
   let account;
@@ -90,10 +97,12 @@ export async function publishReadinessReport({
     summary: blocker.nextAction,
     command: blocker.command
   }));
+  const summary = publishReadinessSummary({ npm, blockers });
   return {
     kind: 'proofroute-publish-readiness-v1',
     generatedAt: new Date().toISOString(),
     status: requiredPass && !skippedRequired ? 'pass' : 'fail',
+    summary,
     package: {
       name: pkg.name,
       version: pkg.version,
@@ -135,6 +144,7 @@ export async function writePublishSupportPack({ report, supportNote, outDir = 'p
     },
     blockerIds: (report.blockers ?? []).map((blocker) => blocker.id),
     nextActionCount: (report.nextActions ?? []).length,
+    npmEvidence: report.npm?.evidence,
     files
   };
   const note = redactSupportDocument(supportNote ?? publishSupportNoteFallback(report));
@@ -175,7 +185,7 @@ async function npmCliCheck({ npmCommand, cwd, runner }) {
     label: 'npm CLI',
     pass: result.ok,
     detail: result.ok ? `${npmCommand} ${result.stdout.trim()} is executable.` : `${npmCommand} is not executable: ${commandMessage(result)}.`,
-    output: result
+    output: summarizeCommand(result)
   });
 }
 
@@ -194,7 +204,7 @@ async function npmPackCheck({ npmCommand, cwd, runner }) {
         label: 'npm pack dry-run',
         pass: false,
         detail: `npm pack output was not valid JSON: ${error.message}.`,
-        output: result
+        output: summarizeCommand(result)
       });
     }
   }
@@ -376,7 +386,10 @@ function publishBlockers({ npm, account, publicFace, actions, repository, npmCom
         code: npm.cli.output?.code
       },
       nextAction: `Run ${npmCommand} --version, install npm if needed, or rerun with proofroute publish --npm /path/to/npm --check-public --check-actions.`,
-      command: `${npmCommand} --version`
+      command: `${npmCommand} --version`,
+      scope: 'local',
+      localFixable: true,
+      supportCategory: 'npm_cli'
     });
   }
   if (npm.metadata && !npm.metadata.pass) {
@@ -389,7 +402,10 @@ function publishBlockers({ npm, account, publicFace, actions, repository, npmCom
         checkId: 'package_metadata'
       },
       nextAction: 'Update package.json so the package is public, has both CLI bins, ships both README surfaces, and uses publishConfig access public, then rerun proofroute publish.',
-      command: 'node ./bin/proofroute.js publish --json'
+      command: 'node ./bin/proofroute.js publish --json',
+      scope: 'local',
+      localFixable: true,
+      supportCategory: 'package_metadata'
     });
   }
   if (npm.pack && !npm.pack.pass && !npm.pack.skipped) {
@@ -404,7 +420,10 @@ function publishBlockers({ npm, account, publicFace, actions, repository, npmCom
         code: npm.pack.output?.code
       },
       nextAction: `Run ${npmCommand} pack --json --dry-run and make the required ProofRoute CLI, source, docs, README, license, security, and env template files appear in the package before publishing.`,
-      command: `${npmCommand} pack --json --dry-run`
+      command: `${npmCommand} pack --json --dry-run`,
+      scope: 'local',
+      localFixable: true,
+      supportCategory: 'npm_pack'
     });
   }
   if (npm.publishDryRun && !npm.publishDryRun.pass && !npm.publishDryRun.skipped) {
@@ -418,7 +437,10 @@ function publishBlockers({ npm, account, publicFace, actions, repository, npmCom
         code: npm.publishDryRun.output?.code
       },
       nextAction: `Run ${npmCommand} publish --dry-run --access public --registry ${registry}, fix any npm errors or metadata auto-corrections, then rerun proofroute publish.`,
-      command: `${npmCommand} publish --dry-run --access public --registry ${registry}`
+      command: `${npmCommand} publish --dry-run --access public --registry ${registry}`,
+      scope: 'local',
+      localFixable: true,
+      supportCategory: 'npm_publish_dry_run'
     });
   }
   if (npm.auth && !npm.auth.pass && !npm.auth.skipped) {
@@ -432,7 +454,10 @@ function publishBlockers({ npm, account, publicFace, actions, repository, npmCom
         code: npm.auth.output?.code
       },
       nextAction: `Run ${npmCommand} login --registry ${registry} or provide an npm automation token, then rerun proofroute publish --check-public --check-actions.`,
-      command: `${npmCommand} login --registry ${registry}`
+      command: `${npmCommand} login --registry ${registry}`,
+      scope: 'operator_auth',
+      localFixable: false,
+      supportCategory: 'npm_auth'
     });
   }
   if (account?.summary && !account.summary.pass) {
@@ -448,7 +473,10 @@ function publishBlockers({ npm, account, publicFace, actions, repository, npmCom
         query: account.query
       },
       nextAction: flagged ? 'Open GitHub account settings and Support for Lling0000; ask GitHub to review the account-level spam or visibility restriction before expecting anonymous repo access to work.' : `Confirm that authenticated GitHub search can find ${repository} through ${account.query}, then rerun the public preflight.`,
-      supportMessage: flagged ? githubSupportMessage({ repository, publicFace, actions }) : undefined
+      supportMessage: flagged ? githubSupportMessage({ repository, publicFace, actions }) : undefined,
+      scope: 'external_platform',
+      localFixable: false,
+      supportCategory: 'github_visibility'
     });
   }
   if (publicFace?.status === 'fail') {
@@ -467,7 +495,10 @@ function publishBlockers({ npm, account, publicFace, actions, repository, npmCom
         githubStatus,
         npmStatus
       },
-      nextAction: account?.blocker === 'account_flagged_as_spammy' ? 'Clear the GitHub account-level visibility blocker first, then publish the npm package and rerun profile --check-public.' : 'Verify the GitHub owner, GitHub repository, and npm package are reachable anonymously, then rerun profile --check-public.'
+      nextAction: account?.blocker === 'account_flagged_as_spammy' ? 'Clear the GitHub account-level visibility blocker first, then publish the npm package and rerun profile --check-public.' : 'Verify the GitHub owner, GitHub repository, and npm package are reachable anonymously, then rerun profile --check-public.',
+      scope: 'external_platform',
+      localFixable: false,
+      supportCategory: 'public_visibility'
     });
   }
   if (actions?.summary && !actions.summary.pass) {
@@ -483,10 +514,42 @@ function publishBlockers({ npm, account, publicFace, actions, repository, npmCom
         enabled: actions.permissions?.enabled,
         recentRuns: actions.runs?.length ?? 0
       },
-      nextAction: userDisabled ? 'Open GitHub account Actions settings or Support; repo-level Actions permissions are already enabled, so repeating repo API toggles will not fix this blocker.' : 'Run the ProofRoute CI workflow after Actions access is healthy, then rerun publish --check-actions.'
+      nextAction: userDisabled ? 'Open GitHub account Actions settings or Support; repo-level Actions permissions are already enabled, so repeating repo API toggles will not fix this blocker.' : 'Run the ProofRoute CI workflow after Actions access is healthy, then rerun publish --check-actions.',
+      supportMessage: userDisabled ? githubActionsSupportMessage({ repository, actions }) : undefined,
+      scope: 'external_platform',
+      localFixable: false,
+      supportCategory: 'github_actions'
     });
   }
   return blockers;
+}
+
+function publishReadinessSummary({ npm, blockers }) {
+  const localChecks = [npm.metadata, npm.cli, npm.pack, npm.publishDryRun].filter(Boolean);
+  const localEvidence = localChecks.length === 0
+    ? 'not_checked'
+    : localChecks.every((check) => check.pass)
+      ? 'pass'
+      : localChecks.some((check) => !check.skipped && !check.pass)
+        ? 'fail'
+        : 'skipped';
+  const blockerIds = blockers.map((blocker) => blocker.id);
+  const localFixableBlockerIds = blockers.filter((blocker) => blocker.localFixable).map((blocker) => blocker.id);
+  const operatorBlockerIds = blockers.filter((blocker) => blocker.scope === 'operator_auth').map((blocker) => blocker.id);
+  const externalBlockerIds = blockers.filter((blocker) => blocker.scope === 'external_platform').map((blocker) => blocker.id);
+  const remainingBlockerScope = blockers.length === 0
+    ? 'none'
+    : localEvidence === 'pass' && localFixableBlockerIds.length === 0
+      ? 'external_or_operator'
+      : 'local_or_mixed';
+  return {
+    localEvidence,
+    remainingBlockerScope,
+    blockerIds,
+    localFixableBlockerIds,
+    operatorBlockerIds,
+    externalBlockerIds
+  };
 }
 
 function actionsUserDisabled(actions) {
@@ -511,9 +574,49 @@ function githubSupportMessage({ repository, publicFace, actions }) {
   ].filter(Boolean).join(' ');
 }
 
+function githubActionsSupportMessage({ repository, actions }) {
+  const enabled = actions?.permissions?.enabled === true ? 'enabled' : 'unknown';
+  const code = actions?.dispatch?.code ?? 'unknown';
+  return `My account owns ${repository}. GitHub repository Actions permissions are ${enabled}, but workflow dispatch is rejected with code ${code} and reports that Actions has been disabled for this user. Please review the account-level Actions restriction shown in the attached publish preflight evidence.`;
+}
+
 function publishSupportNoteFallback(report) {
   const blockers = (report.blockers ?? []).map((blocker) => `${redactSupportText(blocker.id)}: ${redactSupportText(blocker.detail)}`).join(' ');
   return `ProofRoute publish preflight status is ${redactSupportText(report.status ?? 'unknown')}. ${blockers || 'No publish blockers were detected by this run.'}`;
+}
+
+function npmEvidenceSummary(npm) {
+  const pack = npm.pack?.package;
+  const version = npm.cli?.pass ? npmVersionFromOutput(npm.cli.output?.stdout) : undefined;
+  return {
+    command: npm.command,
+    registry: npm.registry,
+    cli: checkState(npm.cli),
+    version,
+    pack: checkState(npm.pack),
+    requiredFilesChecked: requiredPackageFiles.length,
+    requiredFilesMissing: npm.pack?.missing?.length,
+    package: pack ? {
+      filename: pack.filename,
+      entryCount: pack.entryCount,
+      size: pack.size,
+      unpackedSize: pack.unpackedSize,
+      integrity: pack.integrity
+    } : undefined,
+    publishDryRun: checkState(npm.publishDryRun),
+    auth: checkState(npm.auth)
+  };
+}
+
+function npmVersionFromOutput(stdout) {
+  const match = String(stdout ?? '').match(/\b\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?\b/);
+  return match?.[0];
+}
+
+function checkState(check) {
+  if (!check) return 'not_checked';
+  if (check.skipped) return 'skipped';
+  return check.pass ? 'pass' : 'fail';
 }
 
 function publishSupportNextActionsMarkdown({ report, generatedAt }) {
@@ -522,10 +625,16 @@ function publishSupportNextActionsMarkdown({ report, generatedAt }) {
   const blockers = (report.blockers ?? []).map((blocker) => redactSupportText(blocker.id));
   const actions = (report.nextActions ?? []).map((action) => redactSupportText(action.summary)).filter(Boolean);
   const status = redactSupportText(report.status ?? 'unknown').toUpperCase();
+  const npmEvidence = report.npm?.evidence;
+  const evidenceLine = npmEvidence
+    ? `Npm evidence is command ${redactSupportText(npmEvidence.command ?? 'unknown')}, version ${redactSupportText(npmEvidence.version ?? 'unknown')}, pack ${redactSupportText(npmEvidence.pack)}, package ${redactSupportText(npmEvidence.package?.filename ?? 'unknown package')} with ${redactSupportText(npmEvidence.package?.entryCount ?? 'unknown')} files, dry-run ${redactSupportText(npmEvidence.publishDryRun)}, auth ${redactSupportText(npmEvidence.auth)}, and ${redactSupportText(npmEvidence.requiredFilesMissing ?? 'unknown')} missing required files across ${redactSupportText(npmEvidence.requiredFilesChecked ?? 'unknown')} checked files.`
+    : 'Npm evidence was not attached to this publish report.';
   return [
     '# ProofRoute Publish Support Pack',
     '',
     `Generated at ${redactSupportText(generatedAt)} for ${redactSupportText(packageName)} and repository ${redactSupportText(repository)}. The publish preflight status is ${status}, so this pack records release evidence rather than converting the failed gate into a success.`,
+    '',
+    evidenceLine,
     '',
     blockers.length > 0 ? `Detected blocker ids are ${blockers.join(', ')}.` : 'No publish blocker ids were detected by this run.',
     '',
@@ -622,7 +731,7 @@ function skippedCheck(id, label, detail) {
 }
 
 function commandMessage(result) {
-  return compact(`${result.stderr || result.stdout || result.message || `exit ${result.code ?? 'unknown'}`}`);
+  return compact(redactSupportText(`${result.stderr || result.stdout || result.message || `exit ${result.code ?? 'unknown'}`}`));
 }
 
 function parseJsonFromCommand(result) {
@@ -645,9 +754,9 @@ function summarizeCommand(result) {
   return {
     ok: result.ok,
     code: result.code,
-    stdout: compact(result.stdout),
-    stderr: compact(result.stderr),
-    message: result.message
+    stdout: compact(redactSupportText(result.stdout)),
+    stderr: compact(redactSupportText(result.stderr)),
+    message: result.message === undefined ? undefined : redactSupportText(result.message)
   };
 }
 
