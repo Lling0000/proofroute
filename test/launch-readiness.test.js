@@ -110,6 +110,28 @@ test('launch command emits machine-readable readiness proof', async () => {
   }
 });
 
+test('launch core uses an empty ledger when no telemetry is explicit', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'proofroute-launch-core-empty-'));
+  const telemetryPath = join(dir, 'broken-events.jsonl');
+  try {
+    await writeFile(telemetryPath, 'not-json\n', 'utf8');
+    const result = spawnSync(process.execPath, ['./bin/proofroute.js', 'launch', '--core', '--json'], {
+      cwd: process.cwd(),
+      env: { ...process.env, PROOFROUTE_TELEMETRY: telemetryPath },
+      encoding: 'utf8',
+      timeout: 3000
+    });
+    assert.equal(result.status, 0, result.stderr);
+    const report = JSON.parse(result.stdout);
+    assert.equal(report.status, 'pass');
+    assert.equal(report.privacy.status, 'pass');
+    assert.equal(report.privacy.events, 0);
+    assert.match(report.privacy.path, /events\.empty\.jsonl$/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('launch command artifact evidence mode makes no hardware claim', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'proofroute-launch-artifact-'));
   const telemetryPath = join(dir, 'missing-events.jsonl');

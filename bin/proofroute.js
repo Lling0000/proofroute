@@ -109,12 +109,13 @@ try {
     const artifactEvidencePath = classifierArtifactEvidencePath(args, requireArtifactEvidence);
     const mainMaxEvidenceAgeMs = requireArtifactEvidence && !requireEvidence ? undefined : maxEvidenceAgeMs;
     const core = truthy(args.core ?? args['no-accelerator-claim'] ?? args.noAcceleratorClaim) || (requireArtifactEvidence && !requireEvidence);
+    const telemetryOverride = args.file ?? args.telemetry;
     if (core && requireEvidence) throw new Error('Use --core or --require-artifact-evidence for a no-accelerator-claim launch, or --require-evidence for a strict hardware launch, not both.');
     const report = await launchReadinessReport({
       config,
       controller,
       runtime,
-      telemetryPath: telemetryPath(config, args.file ?? args.telemetry),
+      telemetryPath: core && telemetryOverride === undefined ? join(resolve('.proofroute'), 'events.empty.jsonl') : telemetryPath(config, telemetryOverride),
       evidencePath: String(evidencePath),
       requireEvidence,
       evidenceMode: core ? 'skipped' : undefined,
