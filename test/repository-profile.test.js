@@ -108,6 +108,7 @@ test('public repository face check reports GitHub and npm visibility without cre
   assert.equal(report.status, 'pass');
   assert.ok(report.checks.every((check) => check.pass));
   assert.equal(report.badges.status, 'pass');
+  assert.equal(report.checks.find((check) => check.id === 'github_owner_public').pass, true);
   assert.equal(report.checks.find((check) => check.id === 'npm_version').pass, true);
   assert.ok(fetch.calls.every((call) => !hasSensitivePublicHeader(call.options?.headers)));
   const output = renderPublicRepositoryFace(report);
@@ -133,6 +134,36 @@ test('public repository face check fails when GitHub or npm is not publicly visi
   const output = renderPublicRepositoryFace(report);
   assert.match(output, /FAIL/);
   assert.doesNotMatch(JSON.stringify(report), /secret-token|authorization/i);
+});
+
+test('public repository face reports owner visibility separately from repository visibility', async () => {
+  const profile = await repositoryProfileReport();
+  const report = await publicRepositoryFaceReport({
+    fetchImpl: fakePublicFaceFetch({
+      githubOwnerStatus: 404,
+      githubOwner: { message: 'Not Found' },
+      githubStatus: 404,
+      github: { message: 'Not Found' },
+      npmStatus: 200,
+      npm: {
+        name: profile.npm.name,
+        description: profile.npm.description,
+        'dist-tags': { latest: profile.npm.version },
+        repository: { url: profile.npm.repository },
+        versions: {
+          [profile.npm.version]: {
+            description: profile.npm.description,
+            repository: { url: profile.npm.repository }
+          }
+        }
+      }
+    })
+  });
+  assert.equal(report.status, 'fail');
+  assert.equal(report.github.owner.status, 404);
+  assert.equal(report.github.owner.reason, 'not_found');
+  assert.equal(report.checks.find((check) => check.id === 'github_owner_public').pass, false);
+  assert.equal(report.checks.find((check) => check.id === 'github_public').pass, false);
 });
 
 test('public repository face check fails when npm latest version drifts', async () => {
@@ -273,11 +304,12 @@ function fakeGithubRemote(initial) {
   };
 }
 
-function fakePublicFaceFetch({ githubStatus, github, npmStatus, npm, badgeStatus = 200 }) {
+function fakePublicFaceFetch({ githubStatus, github, githubOwnerStatus = 200, githubOwner = { login: 'Lling0000' }, npmStatus, npm, badgeStatus = 200 }) {
   const calls = [];
   const fetch = async (url, options = {}) => {
     calls.push({ url, options });
     const parsed = new URL(url);
+    if (parsed.hostname === 'api.github.com' && parsed.pathname.startsWith('/users/')) return jsonResponse(githubOwner, githubOwnerStatus);
     if (parsed.hostname === 'api.github.com') return jsonResponse(github, githubStatus);
     if (parsed.hostname === 'registry.npmjs.org') return jsonResponse(npm, npmStatus);
     if (parsed.hostname === 'github.com' && parsed.pathname.endsWith('/badge.svg')) return textResponse('<svg></svg>', badgeStatus);

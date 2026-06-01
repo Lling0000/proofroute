@@ -175,6 +175,9 @@ try {
       registry: args.registry,
       checkPublic: !truthy(args['no-public'] ?? args.noPublic) && (truthy(args['check-public'] ?? args.checkPublic) || truthy(args.public)),
       checkActions: truthy(args['check-actions'] ?? args.checkActions),
+      probeActionsDispatch: truthy(args['probe-actions-dispatch'] ?? args.probeActionsDispatch),
+      actionsWorkflow: args['actions-workflow'] ?? args.actionsWorkflow,
+      actionsRef: args['actions-ref'] ?? args.actionsRef ?? args.ref,
       repo: args.repo ?? args['github-repo'] ?? args.githubRepo
     });
     console.log(args.json ? renderJson(report) : renderPublishReadiness(report));

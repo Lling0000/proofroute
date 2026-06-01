@@ -48,6 +48,7 @@ export function renderHelp() {
     '  proofroute release --preflight --core --check-public',
     '  proofroute release --out proofroute-release-pack --check-github --check-public --require-evidence --evidence classifier-evidence.json --max-evidence-age-hours 24',
     '  proofroute publish --check-public --check-actions',
+    '  proofroute publish --check-public --check-actions --probe-actions-dispatch',
     '  proofroute publish --npm /tmp/proofroute-npm-cli/bin/npm-cli.js --check-public',
     '  proofroute smoke',
     '  proofroute smoke --proxy',
@@ -185,6 +186,7 @@ export function renderPublicRepositoryFace(report) {
   return [
     title('public repository face'),
     `${BOLD}${mark}${RESET} ${DIM}${report.repository} and npm package ${report.npmPackage} checked without credentials.${RESET}`,
+    `${pad('owner', 16)} ${report.github?.owner?.url ?? 'unknown'} status ${report.github?.owner?.status ?? 'error'}`,
     `${pad('github', 16)} ${report.github?.url ?? 'unknown'} status ${report.github?.status ?? 'error'}`,
     `${pad('npm', 16)} ${report.npm?.url ?? 'unknown'} status ${report.npm?.status ?? 'error'}${report.npm?.latest ? ` latest ${report.npm.latest}` : ''}`,
     '',
@@ -195,7 +197,7 @@ export function renderPublicRepositoryFace(report) {
 export function renderReleaseProofPack(report) {
   const mark = report.status === 'pass' ? `${GREEN}PASS${RESET}` : report.status === 'warn' ? `${YELLOW}WARN${RESET}` : `${MAGENTA}FAIL${RESET}`;
   const github = report.launch?.github ? `${report.launch.github.status} ${report.launch.github.repository ?? ''}`.trim() : 'not checked';
-  const publicFace = report.launch?.public ? `${report.launch.public.status} github ${report.launch.public.github?.status ?? 'unknown'} npm ${report.launch.public.npm?.status ?? 'unknown'}` : 'not checked';
+  const publicFace = report.launch?.public ? `${report.launch.public.status} owner ${report.launch.public.github?.owner?.status ?? 'unknown'} github ${report.launch.public.github?.status ?? 'unknown'} npm ${report.launch.public.npm?.status ?? 'unknown'}` : 'not checked';
   const evidence = releaseEvidenceDisplay(report.launch?.evidence);
   const evidenceLabel = releaseEvidenceLabel(report.launch?.evidence);
   const artifactEvidence = report.launch?.artifactEvidence ? `${report.launch.artifactEvidence.status ?? 'unknown'} claim ${report.launch.artifactEvidence.claim ?? 'local_artifact'} ${report.launch.artifactEvidence.path ?? 'classifier-linear-evidence.json'}` : undefined;
@@ -225,7 +227,7 @@ export function renderReleaseProofPack(report) {
 export function renderReleasePreflight(report) {
   const mark = report.status === 'pass' ? `${GREEN}PASS${RESET}` : report.status === 'warn' ? `${YELLOW}WARN${RESET}` : `${MAGENTA}FAIL${RESET}`;
   const github = report.launch?.github ? `${report.launch.github.status} ${report.launch.github.repository ?? ''}`.trim() : 'not checked';
-  const publicFace = report.launch?.public ? `${report.launch.public.status} github ${report.launch.public.github?.status ?? 'unknown'} npm ${report.launch.public.npm?.status ?? 'unknown'}` : 'not checked';
+  const publicFace = report.launch?.public ? `${report.launch.public.status} owner ${report.launch.public.github?.owner?.status ?? 'unknown'} github ${report.launch.public.github?.status ?? 'unknown'} npm ${report.launch.public.npm?.status ?? 'unknown'}` : 'not checked';
   const source = releaseSourceLine(report.git);
   const evidence = releaseEvidenceDisplay(report.launch?.evidence);
   const evidenceLabel = releaseEvidenceLabel(report.launch?.evidence);
@@ -253,13 +255,15 @@ export function renderPublishReadiness(report) {
     const state = check.pass ? `${GREEN}pass${RESET}` : check.skipped ? `${YELLOW}skip${RESET}` : `${MAGENTA}fail${RESET}`;
     return `${state} ${pad(check.label, 24)} ${DIM}${compactText(check.detail, 112)}${RESET}`;
   });
-  const publicFace = report.public ? `${report.public.status} github ${report.public.github?.status ?? 'unknown'} npm ${report.public.npm?.status ?? 'unknown'}` : 'not checked';
-  const actions = report.actions ? `${report.actions.summary?.pass ? 'pass' : 'fail'} enabled ${report.actions.permissions?.enabled === true ? 'yes' : 'unknown'} runs ${(report.actions.runs ?? []).length}` : 'not checked';
+  const publicFace = report.public ? `${report.public.status} owner ${report.public.github?.owner?.status ?? 'unknown'} github ${report.public.github?.status ?? 'unknown'} npm ${report.public.npm?.status ?? 'unknown'}` : 'not checked';
+  const github = report.github ? `${report.github.summary?.pass ? 'pass' : 'fail'} ${report.github.repository?.visibility ?? 'unknown'} private ${report.github.repository?.isPrivate === false ? 'no' : report.github.repository?.isPrivate === true ? 'yes' : 'unknown'}` : 'not checked';
+  const actions = report.actions ? `${report.actions.summary?.pass ? 'pass' : 'fail'} enabled ${report.actions.permissions?.enabled === true ? 'yes' : 'unknown'} runs ${(report.actions.runs ?? []).length}${report.actions.dispatch ? ` dispatch ${report.actions.dispatch.ok ? 'ok' : 'fail'}` : ''}` : 'not checked';
   return [
     title('publish readiness'),
     `${BOLD}${mark}${RESET} ${DIM}${report.package?.name}@${report.package?.version} publish preflight for package surface, npm registry auth, public visibility, and launch evidence.${RESET}`,
     `${pad('npm command', 16)} ${report.npm?.command ?? 'npm'}`,
     `${pad('registry', 16)} ${report.npm?.registry ?? 'https://registry.npmjs.org/'}`,
+    `${pad('github auth', 16)} ${github}`,
     `${pad('public face', 16)} ${publicFace}`,
     `${pad('actions', 16)} ${actions}`,
     '',
@@ -310,7 +314,7 @@ export function renderLaunchReadiness(report) {
     `${GREEN}${money(proof.savingsUsd ?? 0)} saved${RESET}, ${MAGENTA}${Number(proof.averageSpeedup ?? 0).toFixed(2)}x${RESET} speedup, ${YELLOW}${ms(Number(proof.p95RouterMs ?? 0))}${RESET} p95 router, ${YELLOW}${percent(proof.p95RouterOverheadPct ?? 0)}${RESET} overhead, ${CYAN}${report.profile?.topicCount ?? 0}${RESET} GitHub topics.`,
     `${pad('proxy smoke', 16)} ${smoke.status ?? 'unknown'} ${smoke.requestedModel ?? 'none'}->${smoke.model ?? 'none'} swap ${smoke.modelSwap ?? 'false'} browser ${smoke.browserProofHeaders ? 'readable' : 'unknown'}`,
     ...(github ? [`${pad('github face', 16)} ${github.status ?? 'unknown'} ${github.repository ?? 'unresolved'}`] : []),
-    ...(publicFace ? [`${pad('public face', 16)} ${publicFace.status ?? 'unknown'} github ${publicFace.github?.status ?? 'unknown'} npm ${publicFace.npm?.status ?? 'unknown'}`] : []),
+    ...(publicFace ? [`${pad('public face', 16)} ${publicFace.status ?? 'unknown'} owner ${publicFace.github?.owner?.status ?? 'unknown'} github ${publicFace.github?.status ?? 'unknown'} npm ${publicFace.npm?.status ?? 'unknown'}`] : []),
     `${pad('privacy', 16)} ${privacy.status ?? 'unknown'} ${privacy.events ?? 0} events, ${privacy.forbiddenMatchCount ?? 0} forbidden fields, ${privacy.parseErrorCount ?? 0} parse errors`,
     `${pad('evidence', 16)} ${evidenceText}`,
     ...(artifactEvidenceText ? [`${pad('artifact', 16)} ${artifactEvidenceText}`] : []),

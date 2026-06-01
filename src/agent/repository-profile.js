@@ -5,25 +5,25 @@ const githubDescription = 'CLI-first OpenAI-compatible LLM router/proxy that rou
 
 const githubTopics = [
   'llm-router',
-  'llm-proxy',
-  'ai-gateway',
-  'llm-gateway',
+  'ai-router',
+  'inference-router',
+  'openai-compatible',
+  'transparent-proxy',
+  'local-llm',
+  'local-first',
+  'prompt-privacy',
+  'cost-optimization',
+  'coding-agent',
+  'vibe-coding',
   'model-router',
   'prompt-routing',
   'model-selection',
-  'openai-compatible',
-  'transparent-proxy',
-  'ollama',
-  'vllm',
-  'local-llm',
-  'local-first',
+  'llm-proxy',
+  'ai-gateway',
+  'llm-gateway',
   'gpu-classifier',
-  'multi-gpu',
-  'onnxruntime',
   'tensorrt',
-  'terminal-ui',
-  'cost-optimization',
-  'vibe-coding'
+  'terminal-ui'
 ];
 
 const readmeBadges = Object.freeze([
@@ -202,6 +202,14 @@ export async function publicRepositoryFaceReport({ packagePath, fetchImpl = glob
     pass: badges.images.length > 0 && badges.images.every((image) => image.pass),
     detail: `${badges.images.filter((image) => image.pass).length}/${badges.images.length} badge images returned public success responses without credentials; badge reachability is advisory because third-party badge services can be transient.`
   }));
+  const owner = desired.repository?.split('/')[0];
+  const githubOwner = await publicGithubOwnerState({ owner, fetchImpl });
+  checks.push(publicCheck({
+    id: 'github_owner_public',
+    label: 'public GitHub owner',
+    pass: githubOwner.ok === true,
+    detail: githubOwner.status === 200 ? `${owner} is visible without credentials.` : `${owner ?? 'unknown owner'} returned HTTP ${githubOwner.status ?? 'error'} without credentials.`
+  }));
   const github = await publicGithubState({ repo: desired.repository, fetchImpl });
   checks.push(publicCheck({
     id: 'github_public',
@@ -254,6 +262,14 @@ export async function publicRepositoryFaceReport({ packagePath, fetchImpl = glob
     github: {
       url: `https://github.com/${desired.repository}`,
       apiUrl: `https://api.github.com/repos/${desired.repository}`,
+      owner: {
+        login: owner,
+        url: owner ? `https://github.com/${owner}` : undefined,
+        apiUrl: owner ? `https://api.github.com/users/${owner}` : undefined,
+        status: githubOwner.status,
+        message: githubOwner.message,
+        reason: githubOwner.reason
+      },
       status: github.status,
       message: github.message,
       reason: github.reason,
@@ -418,6 +434,15 @@ async function githubApi({ repo, token, fetchImpl, path, method = 'GET', body })
 
 async function publicGithubState({ repo, fetchImpl }) {
   return publicJson(`https://api.github.com/repos/${repo}`, fetchImpl, {
+    accept: 'application/vnd.github+json',
+    'x-github-api-version': '2022-11-28',
+    'user-agent': 'proofroute-public-face'
+  });
+}
+
+async function publicGithubOwnerState({ owner, fetchImpl }) {
+  if (!owner) return { status: undefined, ok: false, reason: 'missing_owner', message: 'missing owner' };
+  return publicJson(`https://api.github.com/users/${owner}`, fetchImpl, {
     accept: 'application/vnd.github+json',
     'x-github-api-version': '2022-11-28',
     'user-agent': 'proofroute-public-face'

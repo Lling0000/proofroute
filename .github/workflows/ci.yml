@@ -60,4 +60,9 @@ jobs:
           test -s "$RUNNER_TEMP/proofroute-release-pack/assets/proofroute-terminal.svg"
 
       - name: Check diff whitespace
-        run: git diff --check HEAD^ HEAD
+        run: |
+          if git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+            git diff --check HEAD^ HEAD
+          else
+            git diff --check
+          fi

@@ -22,7 +22,7 @@ ProofRoute 的架构遵循 Agent-View-Controller。Controller 负责本地意图
 node ./bin/proofroute.js demo
 ```
 
-安装或链接包之后，开发者应该记住的命令是 `proofroute demo`。在克隆仓库里，如果本机有 npm，`npm run demo` 指向同一个零网络 proof；当 npm 包公开之后，`npx proofroute demo` 就会成为从 GitHub Star、发布帖或终端截图来到项目的人最轻量的试用路径。
+安装或链接包之后，开发者应该记住的命令是 `proofroute demo`。在克隆仓库里，如果本机有 npm，`npm run demo` 指向同一个零网络 proof；在 npm 公网可见性被发布门禁证明之前，最诚实的复制运行路径仍然是从这个仓库直接执行 Node 命令。
 
 ```sh
 proofroute demo

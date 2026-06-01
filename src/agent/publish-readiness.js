@@ -27,6 +27,9 @@ export async function publishReadinessReport({
   registry = process.env.PROOFROUTE_NPM_REGISTRY ?? 'https://registry.npmjs.org/',
   checkPublic = false,
   checkActions = false,
+  probeActionsDispatch = false,
+  actionsWorkflow = 'ProofRoute CI',
+  actionsRef = 'main',
   repo,
   runner = runCommand,
   fetchImpl = globalThis.fetch
@@ -56,18 +59,21 @@ export async function publishReadinessReport({
     checks.push(npm.pack, npm.publishDryRun, npm.auth);
   }
   let publicFace;
+  let github;
   if (checkPublic) {
+    github = await githubAuthenticatedRepositoryCheck({ repo: repository, cwd, runner });
+    checks.push(github.summary);
     publicFace = await publicRepositoryFaceReport({ packagePath, fetchImpl });
     checks.push(checkFromStatus({
       id: 'public_face',
       label: 'public GitHub and npm face',
       pass: publicFace.status === 'pass',
-      detail: `public face ${publicFace.status}, github ${publicFace.github?.status ?? 'unknown'}, npm ${publicFace.npm?.status ?? 'unknown'}.`
+      detail: `public face ${publicFace.status}, owner ${publicFace.github?.owner?.status ?? 'unknown'}, github ${publicFace.github?.status ?? 'unknown'}, npm ${publicFace.npm?.status ?? 'unknown'}.`
     }));
   }
   let actions;
   if (checkActions) {
-    actions = await githubActionsCheck({ repo: repository, cwd, runner });
+    actions = await githubActionsCheck({ repo: repository, cwd, runner, probeDispatch: probeActionsDispatch, workflow: actionsWorkflow, ref: actionsRef });
     checks.push(actions.summary);
   }
   const requiredPass = checks.filter((check) => check.severity !== 'advisory').every((check) => check.pass || check.skipped);
@@ -83,6 +89,7 @@ export async function publishReadinessReport({
       publishAccess: pkg.publishConfig?.access ?? 'default'
     },
     npm,
+    github,
     public: publicFace,
     actions,
     checks
@@ -169,7 +176,44 @@ async function npmAuthCheck({ npmCommand, cwd, registry, runner }) {
   });
 }
 
-async function githubActionsCheck({ repo, cwd, runner }) {
+async function githubAuthenticatedRepositoryCheck({ repo, cwd, runner }) {
+  if (!repo) {
+    const summary = checkFromStatus({
+      id: 'github_authenticated',
+      label: 'authenticated GitHub repository',
+      pass: false,
+      detail: 'GitHub repository is unknown, so authenticated visibility cannot be checked.'
+    });
+    return { summary };
+  }
+  const result = await runCommandSafe({
+    command: 'gh',
+    args: ['repo', 'view', repo, '--json', 'nameWithOwner,visibility,isPrivate,url,pushedAt'],
+    cwd,
+    runner
+  });
+  let parsed;
+  try {
+    parsed = result.ok ? JSON.parse(result.stdout) : undefined;
+  } catch {
+    parsed = undefined;
+  }
+  const visibility = parsed?.visibility ? String(parsed.visibility).toUpperCase() : 'unknown';
+  const isPublic = result.ok && parsed?.isPrivate === false && visibility === 'PUBLIC';
+  const summary = checkFromStatus({
+    id: 'github_authenticated',
+    label: 'authenticated GitHub repository',
+    pass: isPublic,
+    detail: isPublic ? `authenticated gh sees ${parsed.nameWithOwner ?? repo} as PUBLIC and private=false.` : `authenticated gh visibility is ${visibility}, private=${parsed?.isPrivate ?? 'unknown'}: ${result.ok ? 'metadata did not prove a public repository' : commandMessage(result)}.`
+  });
+  return {
+    summary,
+    repository: parsed,
+    output: summarizeCommand(result)
+  };
+}
+
+async function githubActionsCheck({ repo, cwd, runner, probeDispatch = false, workflow = 'ProofRoute CI', ref = 'main' }) {
   if (!repo) {
     const summary = checkFromStatus({
       id: 'github_actions',
@@ -180,6 +224,7 @@ async function githubActionsCheck({ repo, cwd, runner }) {
     return { summary };
   }
   const permissions = await runCommandSafe({ command: 'gh', args: ['api', `repos/${repo}/actions/permissions`, '--jq', '{enabled,allowed_actions}'], cwd, runner });
+  const dispatch = probeDispatch ? await runCommandSafe({ command: 'gh', args: ['workflow', 'run', workflow, '-R', repo, '--ref', ref], cwd, runner }) : undefined;
   const runs = await runCommandSafe({ command: 'gh', args: ['run', 'list', '-R', repo, '--limit', '5', '--json', 'databaseId,headSha,status,conclusion,workflowName,createdAt,url'], cwd, runner });
   let parsedPermissions;
   let parsedRuns = [];
@@ -196,16 +241,19 @@ async function githubActionsCheck({ repo, cwd, runner }) {
   const enabled = parsedPermissions?.enabled === true;
   const hasRuns = parsedRuns.length > 0;
   const hasPassingRun = parsedRuns.some((run) => run.conclusion === 'success');
-  const pass = permissions.ok && runs.ok && enabled && hasRuns && hasPassingRun;
+  const dispatchOk = dispatch === undefined || dispatch.ok;
+  const pass = permissions.ok && runs.ok && enabled && dispatchOk && hasRuns && hasPassingRun;
+  const dispatchDetail = dispatch === undefined ? '' : `, dispatch probe ${dispatch.ok ? 'ok' : `failed ${commandMessage(dispatch)}`}`;
   const summary = checkFromStatus({
     id: 'github_actions',
     label: 'GitHub Actions',
     pass,
-    detail: pass ? `Actions are enabled and ${parsedRuns.length} recent runs include a passing CI run.` : `Actions enabled ${enabled}, recent runs ${parsedRuns.length}, passing runs ${hasPassingRun ? 'yes' : 'no'}, permissions command ${permissions.ok ? 'ok' : 'failed'}, run list ${runs.ok ? 'ok' : 'failed'}.`
+    detail: pass ? `Actions are enabled and ${parsedRuns.length} recent runs include a passing CI run${dispatchDetail}.` : `Actions enabled ${enabled}, recent runs ${parsedRuns.length}, passing runs ${hasPassingRun ? 'yes' : 'no'}, permissions command ${permissions.ok ? 'ok' : 'failed'}, run list ${runs.ok ? 'ok' : 'failed'}${dispatchDetail}.`
   });
   return {
     summary,
     permissions: parsedPermissions,
+    dispatch: dispatch ? summarizeCommand(dispatch) : undefined,
     runs: parsedRuns,
     errors: {
       permissions: permissions.ok ? undefined : commandMessage(permissions),

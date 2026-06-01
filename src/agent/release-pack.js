@@ -325,7 +325,7 @@ function skippedGitProvenance() {
 function releaseMarkdown({ profile, launch, assetCopies, git, generatedAt }) {
   const proof = launch.proof?.aggregate ?? {};
   const github = launch.github ? ` The live GitHub repository face check is ${launch.github.status}, with description, homepage, and topics compared against the local profile.` : '';
-  const publicFace = launch.public ? ` The no-credential public face check is ${launch.public.status}, with GitHub status ${launch.public.github?.status ?? 'unknown'} and npm status ${launch.public.npm?.status ?? 'unknown'}.` : '';
+  const publicFace = launch.public ? ` The no-credential public face check is ${launch.public.status}, with owner status ${launch.public.github?.owner?.status ?? 'unknown'}, GitHub repository status ${launch.public.github?.status ?? 'unknown'}, and npm status ${launch.public.npm?.status ?? 'unknown'}.` : '';
   const evidenceText = releaseEvidenceText(launch.evidence, launch.artifactEvidence);
   const freshness = releaseEvidenceFreshness(launch.evidence, launch.artifactEvidence);
   const source = gitMarkdown(git);

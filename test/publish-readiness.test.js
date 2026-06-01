@@ -35,6 +35,42 @@ test('publish readiness fails when npm auth and CI evidence are missing', async 
   assert.doesNotMatch(JSON.stringify(report), /NODE_AUTH_TOKEN|secret-token/);
 });
 
+test('publish readiness can probe workflow dispatch errors explicitly', async () => {
+  const report = await publishReadinessReport({
+    checkActions: true,
+    probeActionsDispatch: true,
+    runner: fakePublishRunner({
+      auth: true,
+      dispatchError: 'Actions has been disabled for this user'
+    })
+  });
+  assert.equal(report.status, 'fail');
+  assert.equal(report.actions.dispatch.ok, false);
+  assert.match(report.actions.summary.detail, /dispatch probe failed/);
+  assert.match(report.actions.summary.detail, /Actions has been disabled/);
+});
+
+test('publish readiness contrasts authenticated GitHub visibility with anonymous public face', async () => {
+  const report = await publishReadinessReport({
+    checkPublic: true,
+    runner: fakePublishRunner({ auth: true }),
+    fetchImpl: fakePublicFaceFetch({
+      githubOwnerStatus: 404,
+      githubStatus: 404,
+      npmStatus: 404
+    })
+  });
+  assert.equal(report.status, 'fail');
+  assert.equal(report.github.summary.pass, true);
+  assert.equal(report.github.repository.visibility, 'PUBLIC');
+  assert.equal(report.public.github.owner.status, 404);
+  assert.equal(report.checks.find((check) => check.id === 'github_authenticated').pass, true);
+  assert.equal(report.checks.find((check) => check.id === 'public_face').pass, false);
+  const output = renderPublishReadiness(report);
+  assert.match(output, /github auth/);
+  assert.match(output, /public face/);
+});
+
 test('publish readiness reports a missing npm CLI before package commands run', async () => {
   const report = await publishReadinessReport({
     runner: async () => {
@@ -50,7 +86,7 @@ test('publish readiness reports a missing npm CLI before package commands run', 
   assert.equal(report.npm.auth.skipped, true);
 });
 
-function fakePublishRunner({ auth = true, actionsRuns = [] } = {}) {
+function fakePublishRunner({ auth = true, actionsRuns = [], dispatchError } = {}) {
   return async (command, args) => {
     if (command === 'npm' && args[0] === '--version') {
       return { stdout: '11.16.0\n', stderr: '' };
@@ -71,10 +107,72 @@ function fakePublishRunner({ auth = true, actionsRuns = [] } = {}) {
     if (command === 'gh' && args[0] === 'api') {
       return { stdout: '{"enabled":true,"allowed_actions":"all"}\n', stderr: '' };
     }
+    if (command === 'gh' && args[0] === 'repo') {
+      return {
+        stdout: `${JSON.stringify({
+          nameWithOwner: 'Lling0000/proofroute',
+          visibility: 'PUBLIC',
+          isPrivate: false,
+          url: 'https://github.com/Lling0000/proofroute',
+          pushedAt: '2026-06-01T00:00:00Z'
+        })}\n`,
+        stderr: ''
+      };
+    }
+    if (command === 'gh' && args[0] === 'workflow') {
+      if (!dispatchError) return { stdout: '', stderr: '' };
+      const error = new Error(dispatchError);
+      error.code = 1;
+      error.stderr = dispatchError;
+      throw error;
+    }
     if (command === 'gh' && args[0] === 'run') {
       return { stdout: `${JSON.stringify(actionsRuns)}\n`, stderr: '' };
     }
     throw new Error(`unexpected command ${command} ${args.join(' ')}`);
+  };
+}
+
+function fakePublicFaceFetch({ githubOwnerStatus = 200, githubStatus = 200, npmStatus = 200 }) {
+  return async (url) => {
+    const parsed = new URL(url);
+    if (parsed.hostname === 'api.github.com' && parsed.pathname.startsWith('/users/')) {
+      return jsonResponse({ message: githubOwnerStatus === 200 ? undefined : 'Not Found' }, githubOwnerStatus);
+    }
+    if (parsed.hostname === 'api.github.com') {
+      return jsonResponse({
+        description: 'ProofRoute is a CLI-first transparent LLM routing proxy that prints prompt-free receipts for cost, latency, privacy, and model choice.',
+        homepage: 'https://github.com/Lling0000/proofroute#readme',
+        topics: ['llm-router'],
+        visibility: 'public',
+        private: false,
+        message: githubStatus === 200 ? undefined : 'Not Found'
+      }, githubStatus);
+    }
+    if (parsed.hostname === 'registry.npmjs.org') {
+      return jsonResponse({ message: npmStatus === 200 ? undefined : 'Not Found' }, npmStatus);
+    }
+    return textResponse('<svg></svg>', 200);
+  };
+}
+
+function jsonResponse(body, status) {
+  return {
+    status,
+    ok: status >= 200 && status < 300,
+    headers: new Map([['content-type', 'application/json']]),
+    json: async () => body,
+    text: async () => JSON.stringify(body)
+  };
+}
+
+function textResponse(body, status) {
+  return {
+    status,
+    ok: status >= 200 && status < 300,
+    headers: new Map([['content-type', 'image/svg+xml']]),
+    json: async () => JSON.parse(body),
+    text: async () => body
   };
 }
 
