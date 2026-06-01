@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { publishReadinessReport } from '../src/agent/publish-readiness.js';
+import { publishReadinessReport, writePublishSupportPack } from '../src/agent/publish-readiness.js';
 import { renderPublishReadiness, renderPublishSupportNote } from '../src/view/terminal.js';
 
 test('publish readiness passes when package, npm, auth, and Actions evidence are present', async () => {
@@ -167,6 +168,53 @@ test('publish support note redacts secrets and terminal control codes', () => {
   assert.doesNotMatch(supportNote, /secret-token|user:pass|sk-secret-production-key|\/Users\/alice|\x1b\[31m|github_pat_123456789012345678901234567890/);
 });
 
+test('publish support pack writes redacted evidence files without changing blocker status', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'proofroute-publish-support-pack-'));
+  const outDir = join(dir, 'pack');
+  try {
+    const report = {
+      kind: 'proofroute-publish-readiness-v1',
+      generatedAt: '2026-06-01T00:00:00.000Z',
+      status: 'fail',
+      package: {
+        name: 'proofroute',
+        version: '0.1.0',
+        repository: 'https://user:pass@github.com/Lling0000/proofroute'
+      },
+      blockers: [{
+        id: 'npm_auth_missing',
+        detail: 'npm auth failed at /Users/alice/.npm/_logs/debug.log with NODE_AUTH_TOKEN=secret-token'
+      }],
+      nextActions: [{
+        forBlocker: 'npm_auth_missing',
+        summary: 'Run NODE_AUTH_TOKEN=secret-token npm login --registry https://user:pass@registry.npmjs.org/?token=secret-token'
+      }],
+      checks: []
+    };
+    const supportNote = renderPublishSupportNote(report);
+    const pack = await writePublishSupportPack({ report, supportNote, outDir, now: '2026-06-01T00:01:00.000Z' });
+    assert.equal(pack.kind, 'proofroute-publish-support-pack-v1');
+    assert.equal(pack.status, 'fail');
+    assert.deepEqual(pack.blockerIds, ['npm_auth_missing']);
+    assert.ok(existsSync(join(outDir, 'manifest.json')));
+    assert.ok(existsSync(join(outDir, 'publish-readiness.json')));
+    assert.ok(existsSync(join(outDir, 'publish-support-note.txt')));
+    assert.ok(existsSync(join(outDir, 'next-actions.md')));
+    assert.ok(existsSync(join(outDir, 'redaction-policy.txt')));
+    const combined = [
+      await readFile(join(outDir, 'manifest.json'), 'utf8'),
+      await readFile(join(outDir, 'publish-readiness.json'), 'utf8'),
+      await readFile(join(outDir, 'publish-support-note.txt'), 'utf8'),
+      await readFile(join(outDir, 'next-actions.md'), 'utf8'),
+      await readFile(join(outDir, 'redaction-policy.txt'), 'utf8')
+    ].join('\n');
+    assert.match(combined, /<redacted>|<redacted-secret>|<local-path>/);
+    assert.doesNotMatch(combined, /secret-token|user:pass|\/Users\/alice|\x1b\[/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('publish CLI renders support note while json keeps priority', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'proofroute-publish-'));
   const npmPath = join(dir, 'npm-fake.mjs');
@@ -203,6 +251,36 @@ if (args[0] === '--version') {
     assert.equal(json.status, 1);
     assert.doesNotMatch(json.stdout, /ProofRoute publish support note/);
     assert.equal(JSON.parse(json.stdout).kind, 'proofroute-publish-readiness-v1');
+    const packDir = join(dir, 'support-pack');
+    const packJson = spawnSync(process.execPath, ['./bin/proofroute.js', 'publish', '--npm', npmPath, '--support-pack', packDir, '--json'], {
+      cwd: new URL('..', import.meta.url),
+      encoding: 'utf8'
+    });
+    assert.equal(packJson.status, 1);
+    const packReport = JSON.parse(packJson.stdout);
+    assert.equal(packReport.kind, 'proofroute-publish-readiness-v1');
+    assert.equal(packReport.supportPack.kind, 'proofroute-publish-support-pack-v1');
+    assert.equal(packReport.supportPack.status, 'fail');
+    assert.ok(existsSync(join(packDir, 'manifest.json')));
+    assert.ok(existsSync(join(packDir, 'publish-readiness.json')));
+    assert.ok(existsSync(join(packDir, 'publish-support-note.txt')));
+    const packNote = await readFile(join(packDir, 'publish-support-note.txt'), 'utf8');
+    assert.match(packNote, /ProofRoute publish support note/);
+    assert.match(packNote, /\nBlockers\n/);
+    assert.doesNotMatch(packNote, /PUBLISH READINESS|\x1b\[/);
+    const packSupportNote = spawnSync(process.execPath, ['./bin/proofroute.js', 'publish', '--npm', npmPath, '--support-note', '--support-pack', join(dir, 'support-pack-note')], {
+      cwd: new URL('..', import.meta.url),
+      encoding: 'utf8'
+    });
+    assert.equal(packSupportNote.status, 1);
+    assert.match(packSupportNote.stdout, /ProofRoute publish support note/);
+    assert.ok(existsSync(join(dir, 'support-pack-note', 'manifest.json')));
+    const missingDir = spawnSync(process.execPath, ['./bin/proofroute.js', 'publish', '--npm', npmPath, '--support-pack'], {
+      cwd: new URL('..', import.meta.url),
+      encoding: 'utf8'
+    });
+    assert.equal(missingDir.status, 1);
+    assert.match(missingDir.stderr, /Pass --support-pack as a directory/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

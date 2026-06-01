@@ -1,6 +1,8 @@
 import { execFile as execFileCallback } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { join, relative, resolve } from 'node:path';
 import { promisify } from 'node:util';
+import { redactSupportDocument, redactSupportText, redactSupportValue } from '../redaction.js';
 import { publicRepositoryFaceReport, repositoryProfileReport } from './repository-profile.js';
 
 const execFile = promisify(execFileCallback);
@@ -107,6 +109,47 @@ export async function publishReadinessReport({
     nextActions,
     checks
   };
+}
+
+export async function writePublishSupportPack({ report, supportNote, outDir = 'proofroute-publish-support-pack', cwd = process.cwd(), now } = {}) {
+  if (!report) throw new Error('publish support pack requires a publish readiness report.');
+  const absoluteOut = resolve(cwd, String(outDir || 'proofroute-publish-support-pack'));
+  const generatedAt = timestamp(now);
+  await mkdir(absoluteOut, { recursive: true });
+  const files = [
+    displayPath(cwd, join(absoluteOut, 'manifest.json')),
+    displayPath(cwd, join(absoluteOut, 'publish-readiness.json')),
+    displayPath(cwd, join(absoluteOut, 'publish-support-note.txt')),
+    displayPath(cwd, join(absoluteOut, 'next-actions.md')),
+    displayPath(cwd, join(absoluteOut, 'redaction-policy.txt'))
+  ];
+  const pack = {
+    kind: 'proofroute-publish-support-pack-v1',
+    generatedAt,
+    status: report.status ?? 'unknown',
+    outDir: displayPath(cwd, absoluteOut),
+    package: {
+      name: report.package?.name,
+      version: report.package?.version,
+      repository: report.package?.repository
+    },
+    blockerIds: (report.blockers ?? []).map((blocker) => blocker.id),
+    nextActionCount: (report.nextActions ?? []).length,
+    files
+  };
+  const note = redactSupportDocument(supportNote ?? publishSupportNoteFallback(report));
+  const markdown = publishSupportNextActionsMarkdown({ report, generatedAt });
+  const redactionPolicy = publishSupportRedactionPolicy({ report, generatedAt });
+  await writePackJson(join(absoluteOut, 'manifest.json'), redactSupportValue(pack));
+  await writePackJson(join(absoluteOut, 'publish-readiness.json'), redactSupportValue(report));
+  await writePackText(join(absoluteOut, 'publish-support-note.txt'), note);
+  await writePackText(join(absoluteOut, 'next-actions.md'), markdown);
+  await writePackText(join(absoluteOut, 'redaction-policy.txt'), redactionPolicy);
+  const leakSurface = `${JSON.stringify(redactSupportValue(report))}\n${note}\n${markdown}\n${redactionPolicy}`;
+  if (/Refactor this webhook|Extract customer ids|Rewrite this README|secret production prompt|secret-token|sk-secret/i.test(leakSurface)) {
+    throw new Error('publish support pack would expose prompt-like content or credential-shaped values.');
+  }
+  return redactSupportValue(pack);
 }
 
 function packageMetadataCheck(pkg) {
@@ -410,6 +453,62 @@ function githubSupportMessage({ repository, publicFace, actions }) {
     actionsEvidence,
     'Please review the account-level visibility restriction and any account-level Actions restriction shown in the attached publish preflight evidence.'
   ].filter(Boolean).join(' ');
+}
+
+function publishSupportNoteFallback(report) {
+  const blockers = (report.blockers ?? []).map((blocker) => `${redactSupportText(blocker.id)}: ${redactSupportText(blocker.detail)}`).join(' ');
+  return `ProofRoute publish preflight status is ${redactSupportText(report.status ?? 'unknown')}. ${blockers || 'No publish blockers were detected by this run.'}`;
+}
+
+function publishSupportNextActionsMarkdown({ report, generatedAt }) {
+  const packageName = `${report.package?.name ?? 'unknown'}@${report.package?.version ?? 'unknown'}`;
+  const repository = report.package?.repository ?? 'unknown repository';
+  const blockers = (report.blockers ?? []).map((blocker) => redactSupportText(blocker.id));
+  const actions = (report.nextActions ?? []).map((action) => redactSupportText(action.summary)).filter(Boolean);
+  const status = redactSupportText(report.status ?? 'unknown').toUpperCase();
+  return [
+    '# ProofRoute Publish Support Pack',
+    '',
+    `Generated at ${redactSupportText(generatedAt)} for ${redactSupportText(packageName)} and repository ${redactSupportText(repository)}. The publish preflight status is ${status}, so this pack records release evidence rather than converting the failed gate into a success.`,
+    '',
+    blockers.length > 0 ? `Detected blocker ids are ${blockers.join(', ')}.` : 'No publish blocker ids were detected by this run.',
+    '',
+    actions.length > 0 ? `The next action trail says ${actions.join(' ')}` : 'No next action trail was emitted by this run.',
+    '',
+    'The redacted JSON report keeps machine-readable check evidence, the support note keeps copy-ready human context, and the redaction policy explains which sensitive surfaces were removed before the pack was written.',
+    ''
+  ].join('\n');
+}
+
+function publishSupportRedactionPolicy({ report, generatedAt }) {
+  const blockers = (report.blockers ?? []).map((blocker) => redactSupportText(blocker.id)).join(', ') || 'none';
+  return [
+    'ProofRoute publish support pack redaction policy',
+    '',
+    `Generated at ${redactSupportText(generatedAt)} with blocker ids ${blockers}. This pack is designed for account-level GitHub or npm support conversations and release logs, not for replacing the publish gate.`,
+    '',
+    'The pack redacts ANSI control sequences, terminal control characters, URL userinfo, token-like query parameters, token-shaped environment assignments, Authorization bearer values, OpenAI-style secret keys, GitHub tokens, and local user home paths. It is not expected to contain prompt text, completion text, credentials, private provider endpoints, or raw local npm log paths.',
+    ''
+  ].join('\n');
+}
+
+async function writePackJson(path, value) {
+  await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+}
+
+async function writePackText(path, value) {
+  await writeFile(path, `${String(value).replace(/\n?$/, '\n')}`, 'utf8');
+}
+
+function timestamp(now) {
+  if (now instanceof Date) return now.toISOString();
+  if (now !== undefined) return new Date(now).toISOString();
+  return new Date().toISOString();
+}
+
+function displayPath(cwd, absolutePath) {
+  const rel = relative(cwd, absolutePath);
+  return rel && !rel.startsWith('..') ? rel : absolutePath;
 }
 
 async function runNpm({ npmCommand, args, cwd, runner }) {

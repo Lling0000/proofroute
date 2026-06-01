@@ -10,7 +10,7 @@ import { classifierMetricsReport, doctorReport } from '../src/agent/doctor.js';
 import { launchReadinessReport } from '../src/agent/launch-readiness.js';
 import { privacyReport } from '../src/agent/privacy.js';
 import { parseNonNegativeNumber, startProxy } from '../src/agent/proxy.js';
-import { publishReadinessReport } from '../src/agent/publish-readiness.js';
+import { publishReadinessReport, writePublishSupportPack } from '../src/agent/publish-readiness.js';
 import { releasePreflightReport, releaseProofPack } from '../src/agent/release-pack.js';
 import { githubRepositoryStateReport, publicRepositoryFaceReport, repositoryProfileReport } from '../src/agent/repository-profile.js';
 import { runSmokeTest } from '../src/agent/smoke.js';
@@ -181,6 +181,15 @@ try {
       repo: args.repo ?? args['github-repo'] ?? args.githubRepo
     });
     const supportNote = truthy(args['support-note'] ?? args.supportNote);
+    const supportPack = args['support-pack'] ?? args.supportPack;
+    if (supportPack === true) throw new Error('Pass --support-pack as a directory.');
+    if (supportPack !== undefined) {
+      report.supportPack = await writePublishSupportPack({
+        report,
+        supportNote: renderPublishSupportNote(report),
+        outDir: supportPack
+      });
+    }
     console.log(args.json ? renderJson(report) : supportNote ? renderPublishSupportNote(report) : renderPublishReadiness(report));
     if (report.status === 'fail') process.exitCode = 1;
   } else if (command === 'smoke') {

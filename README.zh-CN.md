@@ -79,7 +79,7 @@ node ./bin/proofroute.js route --trace --prompt "Refactor this webhook, explain 
 
 `demo` 是零网络第一印象。`share` 把同一份 proof 变成适合截图和 Markdown 的路由收据。`prove` 把延迟、节省、速度、请求量和准确率变成会失败的本地或 CI gate。`connect` 打印 drop-in proxy 连接卡片。`models` 渲染可执行模型目录、上下文窗口、价格、延迟和每类意图 leader。`smoke` 在无外部凭证的情况下用 fake provider 验证 runtime 或透明代理。`stats` 把本地 ledger 渲染成终端 proof。`privacy` 扫描 ledger 是否出现 prompt、completion、raw request、raw response 或 credential-shaped 字段。`doctor` 检查 runtime、providers、telemetry 路径、classifier、sidecar 和 policy。`tune` 从本地 telemetry 推荐可审查的 routing-policy patch。`publish` 在 release copy 允许告诉别人安装前检查 package、npm、公开 GitHub、公开 npm、authenticated GitHub 和 Actions 表面。`proxy` 启动真正的 OpenAI 兼容透明代理。
 
-发布门禁输出的是证据而不是安慰。`node ./bin/proofroute.js publish --check-public --check-actions` 或 `npm run publish:preflight` 会产出机器可读的 `blockers` 和 `nextActions`，`--probe-actions-dispatch` 会主动触发 workflow dispatch 来证明账号层 Actions 限制，`--support-note` 会把同一份证据渲染成可复制给外部支持或 release log 的脱敏纯文本，而 `--json` 始终优先保留自动化需要的 JSON 输出。
+发布门禁输出的是证据而不是安慰。`node ./bin/proofroute.js publish --check-public --check-actions` 或 `npm run publish:preflight` 会产出机器可读的 `blockers` 和 `nextActions`，`--probe-actions-dispatch` 会主动触发 workflow dispatch 来证明账号层 Actions 限制，`--support-note` 会把同一份证据渲染成可复制给外部支持或 release log 的脱敏纯文本，`--support-pack proofroute-publish-support-pack` 会把 JSON 报告、support note、next-action prose 和 redaction policy 写成一个小型脱敏附件目录，同时不会把失败门禁改写成成功，而 `--json` 始终优先保留自动化需要的 JSON 输出。
 
 ## 配置与隐私
 
@@ -113,7 +113,7 @@ PROOFROUTE_CLASSIFIER_URL=http://127.0.0.1:8788/classify node ./bin/proofroute.j
 node --test
 ```
 
-维护者侧仓库文案在 [docs/repository-profile.md](docs/repository-profile.md)，同一公共表面可以通过 `node ./bin/proofroute.js profile` 或 `npm run profile` 打印。release 侧入口是 `node ./bin/proofroute.js launch` 或 `npm run launch`，它会把仓库门面、零网络 proof、proxy smoke、隐私审计、share asset 检查和 classifier evidence 状态合并成一张 readiness card。需要把真实公网状态纳入门控时，`node ./bin/proofroute.js launch --check-public` 和 `node ./bin/proofroute.js release --preflight --core --check-public` 会检查公开 GitHub 与 npm 可见性，而不会默认修改远端或写出 proof pack。最后一层发布门禁是 `node ./bin/proofroute.js publish --check-public --check-actions` 或 `npm run publish:preflight`，它会同时检查 package metadata、npm CLI、npm pack dry-run 内容、npm publish dry-run 是否会被自动修正、npm registry 登录态、公开 GitHub 与 npm 可见性，以及最近的 GitHub Actions 证据，并输出机器可读的 `blockers` 和 `nextActions`，让 npm 登录缺失、GitHub 账号可见性限制、匿名 404 和 Actions 禁用变成明确的发布清单。遇到账号层平台限制时，`npm run publish:support-note` 会生成可复制、脱敏、纯文本的支持说明，但不会绕过任何 blocker，也不会把外部账号限制伪装成代码发布成功。
+维护者侧仓库文案在 [docs/repository-profile.md](docs/repository-profile.md)，同一公共表面可以通过 `node ./bin/proofroute.js profile` 或 `npm run profile` 打印。release 侧入口是 `node ./bin/proofroute.js launch` 或 `npm run launch`，它会把仓库门面、零网络 proof、proxy smoke、隐私审计、share asset 检查和 classifier evidence 状态合并成一张 readiness card。需要把真实公网状态纳入门控时，`node ./bin/proofroute.js launch --check-public` 和 `node ./bin/proofroute.js release --preflight --core --check-public` 会检查公开 GitHub 与 npm 可见性，而不会默认修改远端或写出 proof pack。最后一层发布门禁是 `node ./bin/proofroute.js publish --check-public --check-actions` 或 `npm run publish:preflight`，它会同时检查 package metadata、npm CLI、npm pack dry-run 内容、npm publish dry-run 是否会被自动修正、npm registry 登录态、公开 GitHub 与 npm 可见性，以及最近的 GitHub Actions 证据，并输出机器可读的 `blockers` 和 `nextActions`，让 npm 登录缺失、GitHub 账号可见性限制、匿名 404 和 Actions 禁用变成明确的发布清单。遇到账号层平台限制时，`npm run publish:support-note` 会生成可复制、脱敏、纯文本的支持说明，`npm run publish:support-pack` 会生成可归档的脱敏附件目录，但它们都不会绕过任何 blocker，也不会把外部账号限制伪装成代码发布成功。
 
 ProofRoute 想成为开源基础设施里的一个高传播心跳。它最强的 demo 不是幻灯片，也不是落地页，而是一张终端截图：真实 prompt 在毫秒级被路由，本地模型在该赢的时候赢，高质量模型在值得时赢，精确节省金额和工程决策出现在同一个画面里。
 
