@@ -2,7 +2,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-[![CI](https://github.com/Lling0000/proofroute/actions/workflows/ci.yml/badge.svg)](https://github.com/Lling0000/proofroute/actions/workflows/ci.yml) [![GitHub](https://img.shields.io/badge/github-Lling0000%2Fproofroute-181717?logo=github)](https://github.com/Lling0000/proofroute) [![License](https://img.shields.io/badge/license-MIT-2ea44f)](LICENSE) [![Node](https://img.shields.io/badge/node-%3E%3D20-339933?logo=nodedotjs)](package.json) [![Dependencies](https://img.shields.io/badge/runtime%20dependencies-zero-0ea5e9)](package.json) [![Proxy](https://img.shields.io/badge/OpenAI-compatible%20proxy-111827)](#proofroute) [![Architecture](https://img.shields.io/badge/architecture-Agent--View--Controller-7c3aed)](docs/architecture.md)
+[![Proof](https://img.shields.io/badge/local%20proof-zero--network-22c55e)](README.md#quick-start) [![GitHub](https://img.shields.io/badge/github-Lling0000%2Fproofroute-181717?logo=github)](https://github.com/Lling0000/proofroute) [![License](https://img.shields.io/badge/license-MIT-2ea44f)](LICENSE) [![Node](https://img.shields.io/badge/node-%3E%3D20-339933?logo=nodedotjs)](package.json) [![Dependencies](https://img.shields.io/badge/runtime%20dependencies-zero-0ea5e9)](package.json) [![Proxy](https://img.shields.io/badge/OpenAI-compatible%20proxy-111827)](#proofroute) [![Architecture](https://img.shields.io/badge/architecture-Agent--View--Controller-7c3aed)](docs/architecture.md)
 
 ProofRoute 是为 Vibe Coding 准备的隐形大模型路由器。它以 CLI-first 的方式作为 OpenAI 兼容透明代理运行，在开发工具真正调用模型之前，本地识别 prompt 意图，估算上下文和输出预算，然后把请求路由给成本更低、速度足够快、质量匹配当前任务的本地或云端模型，并在终端给出速度提升、资金节省和隐私边界的可复核证据。
 

@@ -17,7 +17,7 @@ test('repository profile keeps public metadata executable and shareable', async 
   assert.equal(report.npm.name, 'proofroute');
   assert.ok(report.npm.keywords.includes('vibe-coding'));
   assert.equal(report.social.badges.length, 7);
-  assert.equal(report.social.badges[0].id, 'ci');
+  assert.equal(report.social.badges[0].id, 'proof');
   assert.match(report.social.shortPitch, /zero-dependency OpenAI-compatible proxy/);
   assert.match(report.commands.firstProof, /proofroute\.js demo/);
   assert.equal(report.commands.publicFace, 'node ./bin/proofroute.js profile --check-public');

@@ -28,10 +28,10 @@ const githubTopics = [
 
 const readmeBadges = Object.freeze([
   Object.freeze({
-    id: 'ci',
-    alt: 'CI',
-    image: 'https://github.com/Lling0000/proofroute/actions/workflows/ci.yml/badge.svg',
-    target: 'https://github.com/Lling0000/proofroute/actions/workflows/ci.yml'
+    id: 'proof',
+    alt: 'Proof',
+    image: 'https://img.shields.io/badge/local%20proof-zero--network-22c55e',
+    target: '#quick-start'
   }),
   Object.freeze({
     id: 'github',

@@ -2,7 +2,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-[![CI](https://github.com/Lling0000/proofroute/actions/workflows/ci.yml/badge.svg)](https://github.com/Lling0000/proofroute/actions/workflows/ci.yml) [![GitHub](https://img.shields.io/badge/github-Lling0000%2Fproofroute-181717?logo=github)](https://github.com/Lling0000/proofroute) [![License](https://img.shields.io/badge/license-MIT-2ea44f)](LICENSE) [![Node](https://img.shields.io/badge/node-%3E%3D20-339933?logo=nodedotjs)](package.json) [![Dependencies](https://img.shields.io/badge/runtime%20dependencies-zero-0ea5e9)](package.json) [![Proxy](https://img.shields.io/badge/OpenAI-compatible%20proxy-111827)](#proofroute) [![Architecture](https://img.shields.io/badge/architecture-Agent--View--Controller-7c3aed)](docs/architecture.md)
+[![Proof](https://img.shields.io/badge/local%20proof-zero--network-22c55e)](#quick-start) [![GitHub](https://img.shields.io/badge/github-Lling0000%2Fproofroute-181717?logo=github)](https://github.com/Lling0000/proofroute) [![License](https://img.shields.io/badge/license-MIT-2ea44f)](LICENSE) [![Node](https://img.shields.io/badge/node-%3E%3D20-339933?logo=nodedotjs)](package.json) [![Dependencies](https://img.shields.io/badge/runtime%20dependencies-zero-0ea5e9)](package.json) [![Proxy](https://img.shields.io/badge/OpenAI-compatible%20proxy-111827)](#proofroute) [![Architecture](https://img.shields.io/badge/architecture-Agent--View--Controller-7c3aed)](docs/architecture.md)
 
 ProofRoute is a CLI-first OpenAI-compatible proxy that routes coding-agent prompts to the cheapest fast-enough model and prints a prompt-free terminal receipt for the decision.
 
