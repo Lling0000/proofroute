@@ -110,6 +110,87 @@ test('release proof pack fails stale classifier evidence when freshness is requi
   }
 });
 
+test('release proof pack does not archive raw classifier evidence when verification fails', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'proofroute-release-poisoned-evidence-'));
+  const outDir = join(dir, 'pack');
+  try {
+    const config = demoCatalog();
+    const controller = new RouteController(config);
+    const runtime = new AgentRuntime(config);
+    const evidencePath = join(dir, 'classifier-evidence.json');
+    const evidence = await fixtureEvidence({ generatedAt: '2026-05-31T23:00:00.000Z' });
+    evidence.evidence.prompt = 'Refactor this webhook with secret-token and customer ids';
+    evidence.evidence.benchmark.content = 'secret production prompt with stacktrace';
+    evidence.evidence.artifacts[0].content = 'Extract customer ids with Bearer smoke-key';
+    await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`, 'utf8');
+    const report = await releaseProofPack({
+      controller,
+      runtime,
+      outDir,
+      telemetryPath: join(dir, 'missing-events.jsonl'),
+      evidencePath,
+      requireEvidence: true,
+      maxEvidenceAgeMs: 24 * 60 * 60 * 1000,
+      now: new Date('2026-06-01T00:00:00.000Z'),
+      smoke: false,
+      gitRunner: fakeGitRunner()
+    });
+    assert.equal(report.status, 'fail');
+    assert.equal(report.launch.evidence.status, 'fail');
+    assert.equal(report.launch.evidence.checks.find((check) => check.id === 'prompt_free').pass, false);
+    assert.equal(existsSync(join(outDir, 'classifier-evidence.json')), false);
+    assert.equal(existsSync(join(outDir, 'classifier-evidence-verify.json')), true);
+    assert.ok(report.evidenceFiles.some((file) => file.status === 'not_copied'));
+    assert.ok(report.evidenceFiles.some((file) => file.status === 'fail' && file.target?.endsWith('classifier-evidence-verify.json')));
+    assert.equal(report.files.some((file) => file.endsWith('classifier-evidence.json')), false);
+    assert.equal(report.files.some((file) => file.endsWith('classifier-evidence-verify.json')), true);
+    const verification = await readFile(join(outDir, 'classifier-evidence-verify.json'), 'utf8');
+    const markdown = await readFile(join(outDir, 'proofroute-release.md'), 'utf8');
+    const launchCopy = await readFile(join(outDir, 'launch-copy.md'), 'utf8');
+    const output = renderReleaseProofPack(report);
+    assert.doesNotMatch(`${JSON.stringify(report)}\n${verification}\n${markdown}\n${launchCopy}\n${output}`, secretLeakPattern);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('release proof pack sanitizes invalid classifier evidence parse failures', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'proofroute-release-invalid-evidence-'));
+  const outDir = join(dir, 'pack');
+  try {
+    const config = demoCatalog();
+    const controller = new RouteController(config);
+    const runtime = new AgentRuntime(config);
+    const evidencePath = join(dir, 'classifier-evidence.json');
+    await writeFile(evidencePath, 'not json secret production prompt with customer ids and sk-secret\n', 'utf8');
+    const report = await releaseProofPack({
+      controller,
+      runtime,
+      outDir,
+      telemetryPath: join(dir, 'missing-events.jsonl'),
+      evidencePath,
+      requireEvidence: true,
+      maxEvidenceAgeMs: 24 * 60 * 60 * 1000,
+      now: new Date('2026-06-01T00:00:00.000Z'),
+      smoke: false,
+      gitRunner: fakeGitRunner()
+    });
+    assert.equal(report.status, 'fail');
+    assert.equal(report.launch.evidence.status, 'fail');
+    assert.equal(existsSync(join(outDir, 'classifier-evidence.json')), false);
+    assert.equal(existsSync(join(outDir, 'classifier-evidence-verify.json')), true);
+    assert.ok(report.evidenceFiles.some((file) => file.status === 'fail' && file.message === 'classifier evidence could not be verified'));
+    const launchReadiness = await readFile(join(outDir, 'launch-readiness.json'), 'utf8');
+    const verification = await readFile(join(outDir, 'classifier-evidence-verify.json'), 'utf8');
+    const markdown = await readFile(join(outDir, 'proofroute-release.md'), 'utf8');
+    const launchCopy = await readFile(join(outDir, 'launch-copy.md'), 'utf8');
+    const output = renderReleaseProofPack(report);
+    assert.doesNotMatch(`${JSON.stringify(report)}\n${launchReadiness}\n${verification}\n${markdown}\n${launchCopy}\n${output}`, secretLeakPattern);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('core release proof pack passes without accelerator evidence', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'proofroute-release-core-'));
   const outDir = join(dir, 'pack');
@@ -187,6 +268,47 @@ test('core release proof pack can require local artifact evidence without hardwa
     const launchCopy = await readFile(join(outDir, 'launch-copy.md'), 'utf8');
     assert.match(launchCopy, /local artifact proof is pass and makes no hardware claim/);
     assert.doesNotMatch(`${JSON.stringify(report)}\n${launchCopy}`, promptLeakPattern);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('core release proof pack does not archive polluted local artifact evidence', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'proofroute-release-artifact-poisoned-'));
+  const outDir = join(dir, 'pack');
+  try {
+    const config = demoCatalog();
+    const controller = new RouteController(config);
+    const runtime = new AgentRuntime(config);
+    const artifactEvidencePath = join(dir, 'classifier-linear-evidence.json');
+    const evidence = await fixtureArtifactOnlyEvidence({ generatedAt: '2026-05-31T23:30:00.000Z' });
+    evidence.evidence.benchmark.content = 'secret production prompt with stacktrace';
+    evidence.evidence.artifacts[0].content = 'Refactor this webhook with customer ids';
+    await writeFile(artifactEvidencePath, `${JSON.stringify(evidence, null, 2)}\n`, 'utf8');
+    const report = await releaseProofPack({
+      controller,
+      runtime,
+      outDir,
+      telemetryPath: join(dir, 'missing-events.jsonl'),
+      core: true,
+      artifactEvidencePath,
+      requireArtifactEvidence: true,
+      artifactMaxEvidenceAgeMs: 24 * 60 * 60 * 1000,
+      now: new Date('2026-06-01T00:00:00.000Z'),
+      smoke: false,
+      gitRunner: fakeGitRunner()
+    });
+    assert.equal(report.status, 'fail');
+    assert.equal(report.launch.evidence.status, 'not_claimed');
+    assert.equal(report.launch.artifactEvidence.status, 'fail');
+    assert.equal(report.launch.artifactEvidence.checks.find((check) => check.id === 'prompt_free').pass, false);
+    assert.equal(existsSync(join(outDir, 'classifier-artifact-evidence.json')), false);
+    assert.equal(existsSync(join(outDir, 'classifier-artifact-evidence-verify.json')), true);
+    assert.ok(report.evidenceFiles.some((file) => file.claim === 'local_artifact' && file.status === 'not_copied'));
+    const verification = await readFile(join(outDir, 'classifier-artifact-evidence-verify.json'), 'utf8');
+    const launchCopy = await readFile(join(outDir, 'launch-copy.md'), 'utf8');
+    assert.match(launchCopy, /no CUDA, TensorRT, or multi-GPU claim/);
+    assert.doesNotMatch(`${JSON.stringify(report)}\n${verification}\n${launchCopy}`, secretLeakPattern);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

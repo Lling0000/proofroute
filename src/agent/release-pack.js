@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { copyFile, mkdir, writeFile } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
-import { verifyClassifierEvidenceFile } from './classifier-evidence.js';
+import { classifierEvidenceVerificationFailure, verifyClassifierEvidenceFile } from './classifier-evidence.js';
 import { launchReadinessReport } from './launch-readiness.js';
 import { repositoryProfileReport } from './repository-profile.js';
 
@@ -38,12 +38,13 @@ export async function releaseProofPack({ controller, runtime, outDir = 'proofrou
     publicFetch,
     cwd
   });
+  const packLaunch = releasePackSafeLaunch(launch);
   const gitReport = git === false ? skippedGitProvenance() : await gitProvenanceReport({ cwd, gitRunner });
   await mkdir(absoluteOut, { recursive: true });
   await mkdir(join(absoluteOut, 'assets'), { recursive: true });
   const files = [];
   await writeJson(join(absoluteOut, 'repository-profile.json'), profile, files, cwd);
-  await writeJson(join(absoluteOut, 'launch-readiness.json'), launch, files, cwd);
+  await writeJson(join(absoluteOut, 'launch-readiness.json'), packLaunch, files, cwd);
   await writeJson(join(absoluteOut, 'git-provenance.json'), gitReport, files, cwd);
   const assetCopies = [];
   for (const asset of launch.assets ?? []) {
@@ -96,9 +97,9 @@ export async function releaseProofPack({ controller, runtime, outDir = 'proofrou
     }));
   }
   const generatedAt = new Date().toISOString();
-  const status = releaseStatus([launch.status, gitReport.status, evidenceFilesStatus(evidenceFiles)]);
-  const markdown = releaseMarkdown({ profile, launch, assetCopies, git: gitReport, generatedAt });
-  const launchCopy = launchCopyMarkdown({ profile, launch, git: gitReport, generatedAt });
+  const status = releaseStatus([packLaunch.status, gitReport.status, evidenceFilesStatus(evidenceFiles)]);
+  const markdown = releaseMarkdown({ profile, launch: packLaunch, assetCopies, git: gitReport, generatedAt });
+  const launchCopy = launchCopyMarkdown({ profile, launch: packLaunch, git: gitReport, generatedAt });
   if (promptLeakPattern.test(`${markdown}\n${launchCopy}`)) throw new Error('release proof pack markdown would expose prompt-like content.');
   await writeText(join(absoluteOut, 'proofroute-release.md'), markdown, files, cwd);
   await writeText(join(absoluteOut, 'launch-copy.md'), launchCopy, files, cwd);
@@ -113,16 +114,16 @@ export async function releaseProofPack({ controller, runtime, outDir = 'proofrou
     core,
     git: gitReport,
     launch: {
-      status: launch.status,
-      checks: launch.checks,
-      proof: launch.proof,
-      github: launch.github,
-      public: launch.public,
-      smoke: launch.smoke,
-      smokeMatrix: launch.smokeMatrix,
-      privacy: launch.privacy,
-      evidence: launch.evidence,
-      artifactEvidence: launch.artifactEvidence
+      status: packLaunch.status,
+      checks: packLaunch.checks,
+      proof: packLaunch.proof,
+      github: packLaunch.github,
+      public: packLaunch.public,
+      smoke: packLaunch.smoke,
+      smokeMatrix: packLaunch.smokeMatrix,
+      privacy: packLaunch.privacy,
+      evidence: packLaunch.evidence,
+      artifactEvidence: packLaunch.artifactEvidence
     },
     profile: {
       githubDescription: profile.github.description,
@@ -232,20 +233,89 @@ export async function releasePreflightReport({ controller, runtime, outDir = 'pr
 async function copyClassifierEvidence({ cwd, absoluteOut, evidencePath, required = false, requireHardwareProbe = false, allowArtifactOnly = false, maxEvidenceAgeMs, now, files, claim = 'classifier', targetName = 'classifier-evidence.json', verifyName = 'classifier-evidence-verify.json' }) {
   const output = [];
   const target = join(absoluteOut, targetName);
+  const verificationPath = join(absoluteOut, verifyName);
   const strictEvidence = required || maxEvidenceAgeMs !== undefined;
   try {
-    await copyFile(resolve(cwd, evidencePath), target);
-    const copied = { source: evidencePath, target: displayPath(cwd, target), status: 'copied', claim };
-    output.push(copied);
-    files.push(copied.target);
     const verification = await verifyClassifierEvidenceFile(evidencePath, { cwd, allowArtifactOnly, requireHardwareProbe, maxAgeMs: maxEvidenceAgeMs, now });
-    const verificationPath = join(absoluteOut, verifyName);
-    await writeJson(verificationPath, verification, files, cwd);
+    await writeJson(verificationPath, releasePackSafeVerification(verification), files, cwd);
+    if (verification.status === 'pass') {
+      await copyFile(resolve(cwd, evidencePath), target);
+      const copied = { source: evidencePath, target: displayPath(cwd, target), status: 'copied', claim, verified: true };
+      output.push(copied);
+      files.push(copied.target);
+    } else {
+      output.push({
+        source: evidencePath,
+        status: 'not_copied',
+        claim,
+        message: 'classifier evidence verification failed, so raw evidence was not copied into the release pack'
+      });
+    }
     output.push({ source: evidencePath, target: displayPath(cwd, verificationPath), status: verification.status, claim });
   } catch (error) {
-    output.push({ source: evidencePath, status: strictEvidence ? 'fail' : 'missing', claim, message: error.code === 'ENOENT' ? 'not found' : error.message });
+    if (error.code !== 'ENOENT') {
+      const verification = releasePackSafeVerification(classifierEvidenceVerificationFailure(evidencePath, error, { cwd, now }));
+      await writeJson(verificationPath, verification, files, cwd);
+      output.push({ source: evidencePath, target: displayPath(cwd, verificationPath), status: verification.status, claim });
+    }
+    output.push({ source: evidencePath, status: strictEvidence || error.code !== 'ENOENT' ? 'fail' : 'missing', claim, message: error.code === 'ENOENT' ? 'not found' : 'classifier evidence could not be verified' });
   }
   return output;
+}
+
+function releasePackSafeLaunch(launch) {
+  return {
+    ...launch,
+    evidence: releasePackSafeEvidenceReport(launch.evidence),
+    artifactEvidence: releasePackSafeEvidenceReport(launch.artifactEvidence)
+  };
+}
+
+function releasePackSafeEvidenceReport(report) {
+  if (!report || report.status === 'pass' || report.status === 'not_claimed') return report;
+  return releasePackSafeVerification(report);
+}
+
+function releasePackSafeVerification(report) {
+  if (!report || report.status === 'pass' || report.status === 'not_claimed') return report;
+  const checks = safeVerificationChecks(report.checks);
+  const failedChecks = safeVerificationChecks(report.failedChecks ?? checks.filter((check) => !check.pass));
+  return {
+    kind: report.kind,
+    status: report.status,
+    path: report.path,
+    mode: report.mode,
+    claim: report.claim,
+    allowArtifactOnly: report.allowArtifactOnly,
+    requireHardwareProbe: report.requireHardwareProbe,
+    generatedAt: safeTimestamp(report.generatedAt),
+    evidenceGeneratedAt: safeTimestamp(report.evidenceGeneratedAt),
+    evidenceAgeMs: finiteNumber(report.evidenceAgeMs),
+    maxEvidenceAgeMs: finiteNumber(report.maxEvidenceAgeMs),
+    evidenceKind: report.evidenceKind,
+    checks,
+    failedChecks,
+    artifacts: Array.isArray(report.artifacts) ? [] : undefined,
+    message: 'classifier evidence verification failed without archiving raw evidence'
+  };
+}
+
+function safeVerificationChecks(checks = []) {
+  return (Array.isArray(checks) ? checks : []).map((check) => ({
+    id: check.id,
+    pass: Boolean(check.pass),
+    message: check.pass ? 'passed' : 'failed'
+  }));
+}
+
+function safeTimestamp(value) {
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : undefined;
+}
+
+function finiteNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : undefined;
 }
 
 async function verifyReleaseEvidence({ cwd, evidencePath, required = false, requireHardwareProbe = false, allowArtifactOnly = false, maxEvidenceAgeMs, now, claim = 'classifier' }) {
@@ -387,10 +457,10 @@ function compactCounts(values = {}) {
 function releaseEvidenceFreshness(evidence, artifactEvidence) {
   const rows = [];
   if (evidence?.maxEvidenceAgeMs !== undefined) {
-    rows.push(`The classifier evidence freshness gate requires an artifact no older than ${hours(evidence.maxEvidenceAgeMs)} hours, and the copied evidence is currently ${evidence.evidenceAgeMs === undefined ? 'unaged' : `${hours(evidence.evidenceAgeMs)} hours old`}.`);
+    rows.push(`The classifier evidence freshness gate requires an artifact no older than ${hours(evidence.maxEvidenceAgeMs)} hours, and the submitted evidence is currently ${evidence.evidenceAgeMs === undefined ? 'unaged' : `${hours(evidence.evidenceAgeMs)} hours old`}.`);
   }
   if (artifactEvidence?.maxEvidenceAgeMs !== undefined) {
-    rows.push(`The local artifact evidence freshness gate requires an artifact no older than ${hours(artifactEvidence.maxEvidenceAgeMs)} hours, and the copied artifact evidence is currently ${artifactEvidence.evidenceAgeMs === undefined ? 'unaged' : `${hours(artifactEvidence.evidenceAgeMs)} hours old`}.`);
+    rows.push(`The local artifact evidence freshness gate requires an artifact no older than ${hours(artifactEvidence.maxEvidenceAgeMs)} hours, and the submitted artifact evidence is currently ${artifactEvidence.evidenceAgeMs === undefined ? 'unaged' : `${hours(artifactEvidence.evidenceAgeMs)} hours old`}.`);
   }
   return rows.length ? ` ${rows.join(' ')}` : '';
 }

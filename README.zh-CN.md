@@ -44,7 +44,7 @@ node ./bin/proofroute.js route --trace --prompt "Refactor this webhook, explain 
 node ./bin/proofroute.js release --core --out proofroute-release-pack
 ```
 
-当维护者想要更强的普通笔记本证据时，`npm run classifier:artifact:evidence` 和 `npm run classifier:artifact:verify` 可以生成并验证 `classifier-linear-evidence.json`，然后把本地 artifact proof 合入同一个无硬件宣称的 release archive。这个路径证明的是本地 classifier 模型 artifact 的哈希和 benchmark gate，而不是 CUDA、TensorRT 或多 GPU 硬件。
+当维护者想要更强的普通笔记本证据时，`npm run classifier:artifact:evidence` 和 `npm run classifier:artifact:verify` 可以生成并验证 `classifier-linear-evidence.json`，然后把本地 artifact proof 合入同一个无硬件宣称的 release archive。release pack 会先验证 classifier evidence，验证通过后才复制原始 evidence 文件；如果 evidence 验证失败或带有 prompt-like 字段，archive 只保留 verifier failure 和 blocker 摘要，不归档原始提交内容。这个路径证明的是本地 classifier 模型 artifact 的哈希和 benchmark gate，而不是 CUDA、TensorRT 或多 GPU 硬件。
 
 ```sh
 node ./bin/proofroute.js release --core --require-artifact-evidence --artifact-evidence classifier-linear-evidence.json --max-evidence-age-hours 24 --out proofroute-release-pack
