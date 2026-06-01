@@ -194,7 +194,7 @@ try {
     console.log(args.json ? renderJson(report) : supportNote ? renderPublishSupportNote(report) : renderPublishReadiness(report));
     if (report.status === 'fail') process.exitCode = 1;
   } else if (command === 'smoke') {
-    const report = await runSmokeTest({ prompt: args.prompt, policy: args.policy, throughProxy: Boolean(args.proxy) });
+    const report = await runSmokeTest({ prompt: args.prompt, policy: args.policy, throughProxy: Boolean(args.proxy), matrix: truthy(args.matrix) });
     console.log(args.json ? renderJson(report) : renderSmoke(report));
     if (report.status === 'fail') process.exitCode = 1;
   } else if (command === 'bench') {

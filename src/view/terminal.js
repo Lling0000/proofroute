@@ -61,6 +61,7 @@ export function renderHelp() {
     '  proofroute publish --npm /tmp/proofroute-npm-cli/bin/npm-cli.js --check-public',
     '  proofroute smoke',
     '  proofroute smoke --proxy',
+    '  proofroute smoke --proxy --matrix',
     '  proofroute bench --prompt "refactor this webhook" --runs 9',
     '  proofroute calibrate --file examples/samples.json',
     '  proofroute calibrate --file examples/samples.json --json --out calibration.json',
@@ -106,7 +107,7 @@ export function renderHelp() {
     '  launch  Run the local launch readiness proof across repository face, demo proof, proxy smoke, privacy, assets, and classifier evidence.',
     '  release Write a prompt-free release proof pack with readiness JSON, repository metadata, git provenance, launch copy, and SVG proof assets.',
     '  publish Check npm, package, public face, GitHub Actions evidence, plain support notes, and redacted support packs while --json keeps JSON priority.',
-    '  smoke   Run a local fake-provider execution loop through the Agent runtime or the transparent proxy.',
+    '  smoke   Run a local fake-provider execution loop through the Agent runtime, the transparent proxy, or a proxy routing matrix.',
     '  bench   Run a zero-network local benchmark that makes routing value visible immediately.',
     '  calibrate Run a local prompt suite and show intent accuracy, savings, and p95 routing latency.',
     '  learn   Train a local intent artifact from labeled samples or calibration reports and optionally export ONNX.',
@@ -692,6 +693,7 @@ export function renderModelCatalog(report) {
 }
 
 export function renderSmoke(report) {
+  if (report.mode === 'proxy_matrix') return renderSmokeMatrix(report);
   const passed = report.status === 'pass';
   const mark = passed ? 'PASS' : 'FAIL';
   const markColor = passed ? GREEN : MAGENTA;
@@ -726,6 +728,37 @@ export function renderSmoke(report) {
     `${BOLD}${markColor}${mark}${RESET} ${DIM}${mode} proved routing, OpenAI-compatible forwarding, ${proofSurface} without external network.${RESET}`,
     `${BOLD}${report.decision.model.id}${RESET} won for ${CYAN}${report.decision.intent.name}${RESET} under ${CYAN}${report.decision.policy ?? 'unknown'}${RESET} policy, hit upstream model ${CYAN}${request.model ?? 'none'}${RESET}, and returned ${YELLOW}${report.response.status}${RESET}.`,
     '',
+    ...rows
+  ].join('\n');
+}
+
+function renderSmokeMatrix(report) {
+  const passed = report.status === 'pass';
+  const mark = passed ? 'PASS' : 'FAIL';
+  const markColor = passed ? GREEN : MAGENTA;
+  const browserProof = report.cors?.exposeHeaders?.includes('x-proofroute-model') ? 'readable' : 'hidden';
+  const ledgerProof = report.ledger?.promptFree ? 'prompt-free' : 'needs audit';
+  const privacy = report.ledger?.privacy;
+  const privacyProof = privacy ? `privacy ${privacy.status}, forbidden ${privacy.forbiddenMatchCount}, parse ${privacy.parseErrorCount}` : 'privacy unchecked';
+  const rows = (report.scenarios ?? []).map((scenario) => {
+    const state = scenario.passed ? `${GREEN}pass${RESET}` : `${MAGENTA}fail${RESET}`;
+    const route = `${scenario.requestedModel}->${scenario.model}`;
+    const rejected = scenario.rejectedReasons?.length ? scenario.rejectedReasons.join(',') : 'none';
+    return `${state} ${pad(scenario.id, 16)} ${pad(scenario.proof, 8)} ${pad(route, 34)} ${pad(scenario.intent, 13)} ${pad(money(scenario.routeCostUsd), 10)} ${pad(`${scenario.speedup.toFixed(2)}x`, 7)} ${rejected}`;
+  });
+  return [
+    title('proxy matrix'),
+    `${BOLD}${markColor}${mark}${RESET} ${DIM}same OpenAI-compatible proxy origin proved intent, context, and cost routing without external network.${RESET}`,
+    `${BOLD}${report.aggregate.passed}/${report.aggregate.count} scenarios${RESET} passed through ${CYAN}${report.proxy?.origin ?? 'unknown proxy'}${RESET}, with ${GREEN}${money(report.aggregate.savingsUsd)} saved${RESET}, ${MAGENTA}${report.aggregate.averageSpeedup.toFixed(2)}x${RESET} average speedup, and ${YELLOW}${ms(report.aggregate.p95RouterMs)}${RESET} p95 router.`,
+    '',
+    `${pad('browser proof', 16)} ${browserProof}`,
+    `${pad('ledger proof', 16)} ${ledgerProof} ${report.ledger?.events ?? 0} events, ${privacyProof}`,
+    `${pad('model swaps', 16)} ${report.aggregate.modelSwaps}/${report.aggregate.count}`,
+    `proof mix ${compactCounts(report.aggregate.proofs) || 'none'}`,
+    `intent mix ${compactCounts(report.aggregate.intents) || 'none'}`,
+    `model mix ${compactCounts(report.aggregate.models) || 'none'}`,
+    '',
+    `${pad('state', 5)} ${pad('case', 16)} ${pad('proof', 8)} ${pad('route', 34)} ${pad('intent', 13)} ${pad('cost', 10)} speed   rejected`,
     ...rows
   ].join('\n');
 }

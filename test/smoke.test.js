@@ -88,3 +88,54 @@ test('smoke test can prove the full transparent proxy entrypoint', async () => {
   assert.match(output, /actual tokens/);
   assert.match(renderHelp(), /proofroute smoke --proxy/);
 });
+
+test('proxy smoke matrix proves intent context and cost routing through one entrypoint', async () => {
+  const report = await runSmokeTest({ throughProxy: true, matrix: true });
+  assert.equal(report.status, 'pass');
+  assert.equal(report.mode, 'proxy_matrix');
+  assert.equal(report.scenarios.length, 4);
+  assert.equal(report.aggregate.passed, 4);
+  assert.equal(report.aggregate.count, 4);
+  assert.equal(report.ledger.events, 4);
+  assert.equal(report.ledger.promptFree, true);
+  assert.equal(report.ledger.privacy.status, 'pass');
+  assert.equal(report.ledger.privacy.forbiddenMatchCount, 0);
+  assert.equal(report.ledger.privacy.parseErrorCount, 0);
+  assert.equal(report.upstream.requests.length, 4);
+  assert.ok(report.scenarios.every((scenario) => scenario.passed));
+  assert.ok(report.scenarios.every((scenario, index) => report.upstream.requests[index].model === scenario.model));
+  assert.ok(report.upstream.requests.every((request) => request.authorizationPresent));
+  assert.ok(report.upstream.requests.every((request) => request.authorization === undefined));
+  assert.ok(report.scenarios.every((scenario) => scenario.modelSwap === 'true'));
+  assert.deepEqual(Object.keys(report.aggregate.proofs).sort(), ['context', 'cost', 'intent']);
+
+  const byId = Object.fromEntries(report.scenarios.map((scenario) => [scenario.id, scenario]));
+  assert.equal(byId['intent-code'].intent, 'code');
+  assert.equal(byId['intent-code'].model, 'smoke-code-pro');
+  assert.equal(byId['intent-writing'].intent, 'writing');
+  assert.equal(byId['intent-writing'].model, 'smoke-writer-pro');
+  assert.notEqual(byId['intent-code'].model, byId['intent-writing'].model);
+  assert.equal(byId['context-window'].intent, 'long_context');
+  assert.equal(byId['context-window'].model, 'smoke-long-context');
+  assert.ok(byId['context-window'].rejectedReasons.includes('context_window'));
+  assert.ok(byId['context-window'].rejectedModels.includes('smoke-premium'));
+  assert.ok(byId['context-window'].rejectedModels.includes('smoke-code-pro'));
+  assert.ok(byId['context-window'].rejectedModels.includes('smoke-writer-pro'));
+  assert.ok(byId['context-window'].rejectedModels.includes('smoke-cheap'));
+  assert.equal(byId['cost-ceiling'].intent, 'extraction');
+  assert.equal(byId['cost-ceiling'].model, 'smoke-cheap');
+  assert.ok(byId['cost-ceiling'].rejectedReasons.includes('cost_budget'));
+  assert.ok(byId['cost-ceiling'].routeCostUsd <= 0.00003);
+
+  const surface = JSON.stringify(report);
+  assert.doesNotMatch(surface, /Refactor this TypeScript|Rewrite this launch|Audit this repository|customer ids|stacktrace|Bearer smoke-key/);
+  const output = renderSmoke(report);
+  assert.match(output, /PROXY MATRIX/);
+  assert.match(output, /same OpenAI-compatible proxy origin/);
+  assert.match(output, /ledger proof/);
+  assert.match(output, /intent-code/);
+  assert.match(output, /context-window/);
+  assert.match(output, /cost-ceiling/);
+  assert.match(output, /cost_budget/);
+  assert.match(renderHelp(), /proofroute smoke --proxy --matrix/);
+});

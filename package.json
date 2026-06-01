@@ -59,6 +59,7 @@
     "privacy": "node ./bin/proofroute.js privacy",
     "smoke": "node ./bin/proofroute.js smoke",
     "smoke:proxy": "node ./bin/proofroute.js smoke --proxy",
+    "smoke:proxy:matrix": "node ./bin/proofroute.js smoke --proxy --matrix",
     "doctor": "node ./bin/proofroute.js doctor",
     "doctor:hardware": "node ./bin/proofroute.js doctor --strict-hardware",
     "classifier:linear": "sh ./examples/linear-accelerator-sidecar.sh",
