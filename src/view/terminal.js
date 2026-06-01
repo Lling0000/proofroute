@@ -47,6 +47,8 @@ export function renderHelp() {
     '  proofroute release --out proofroute-release-pack --check-github',
     '  proofroute release --preflight --core --check-public',
     '  proofroute release --out proofroute-release-pack --check-github --check-public --require-evidence --evidence classifier-evidence.json --max-evidence-age-hours 24',
+    '  proofroute publish --check-public --check-actions',
+    '  proofroute publish --npm /tmp/proofroute-npm-cli/bin/npm-cli.js --check-public',
     '  proofroute smoke',
     '  proofroute smoke --proxy',
     '  proofroute bench --prompt "refactor this webhook" --runs 9',
@@ -93,6 +95,7 @@ export function renderHelp() {
     '  profile Print repository About copy, GitHub topics, README badges, npm metadata, launch pitch, proof commands, and optional GitHub drift checks.',
     '  launch  Run the local launch readiness proof across repository face, demo proof, proxy smoke, privacy, assets, and classifier evidence.',
     '  release Write a prompt-free release proof pack with readiness JSON, repository metadata, git provenance, launch copy, and SVG proof assets.',
+    '  publish Check the npm CLI, package tarball, publish dry-run, npm auth, public face, and optional GitHub Actions evidence.',
     '  smoke   Run a local fake-provider execution loop through the Agent runtime or the transparent proxy.',
     '  bench   Run a zero-network local benchmark that makes routing value visible immediately.',
     '  calibrate Run a local prompt suite and show intent accuracy, savings, and p95 routing latency.',
@@ -128,6 +131,7 @@ export function renderRepositoryProfile(report) {
     `${pad('first proof', 16)} ${report.commands.firstProof}`,
     `${pad('public face', 16)} ${report.commands.publicFace}`,
     `${pad('npm dry run', 16)} ${report.commands.npmDryRun}`,
+    `${pad('publish gate', 16)} ${report.commands.publishPreflight}`,
     `${pad('core launch', 16)} ${report.commands.coreLaunch}`,
     `${pad('public launch', 16)} ${report.commands.publicLaunch}`,
     `${pad('core pack', 16)} ${report.commands.coreReleasePack}`,
@@ -240,6 +244,26 @@ export function renderReleasePreflight(report) {
     `${pad('would write', 16)} ${(report.wouldWrite ?? []).length} release pack entries`,
     '',
     ...files
+  ].join('\n');
+}
+
+export function renderPublishReadiness(report) {
+  const mark = report.status === 'pass' ? `${GREEN}PASS${RESET}` : `${MAGENTA}FAIL${RESET}`;
+  const rows = (report.checks ?? []).map((check) => {
+    const state = check.pass ? `${GREEN}pass${RESET}` : check.skipped ? `${YELLOW}skip${RESET}` : `${MAGENTA}fail${RESET}`;
+    return `${state} ${pad(check.label, 24)} ${DIM}${compactText(check.detail, 112)}${RESET}`;
+  });
+  const publicFace = report.public ? `${report.public.status} github ${report.public.github?.status ?? 'unknown'} npm ${report.public.npm?.status ?? 'unknown'}` : 'not checked';
+  const actions = report.actions ? `${report.actions.summary?.pass ? 'pass' : 'fail'} enabled ${report.actions.permissions?.enabled === true ? 'yes' : 'unknown'} runs ${(report.actions.runs ?? []).length}` : 'not checked';
+  return [
+    title('publish readiness'),
+    `${BOLD}${mark}${RESET} ${DIM}${report.package?.name}@${report.package?.version} publish preflight for package surface, npm registry auth, public visibility, and launch evidence.${RESET}`,
+    `${pad('npm command', 16)} ${report.npm?.command ?? 'npm'}`,
+    `${pad('registry', 16)} ${report.npm?.registry ?? 'https://registry.npmjs.org/'}`,
+    `${pad('public face', 16)} ${publicFace}`,
+    `${pad('actions', 16)} ${actions}`,
+    '',
+    ...rows
   ].join('\n');
 }
 

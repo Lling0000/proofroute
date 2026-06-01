@@ -49,6 +49,7 @@
     "release:strict:preflight": "node ./bin/proofroute.js release --preflight --require-evidence --evidence classifier-evidence.json --max-evidence-age-hours 24",
     "release:strict": "node ./bin/proofroute.js release --out proofroute-release-pack --check-github --require-evidence --evidence classifier-evidence.json --max-evidence-age-hours 24",
     "release:npm:dry-run": "npm pack --json --dry-run",
+    "publish:preflight": "node ./bin/proofroute.js publish --check-public --check-actions",
     "share": "node ./bin/proofroute.js share",
     "share:markdown": "node ./bin/proofroute.js share --markdown",
     "share:svg": "node ./bin/proofroute.js share --svg --out docs/proofroute-terminal.svg",

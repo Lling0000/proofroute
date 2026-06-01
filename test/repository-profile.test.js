@@ -22,6 +22,7 @@ test('repository profile keeps public metadata executable and shareable', async 
   assert.match(report.commands.firstProof, /proofroute\.js demo/);
   assert.equal(report.commands.publicFace, 'node ./bin/proofroute.js profile --check-public');
   assert.equal(report.commands.npmDryRun, 'npm run release:npm:dry-run');
+  assert.equal(report.commands.publishPreflight, 'node ./bin/proofroute.js publish --check-public --check-actions');
   assert.equal(report.commands.coreLaunch, 'node ./bin/proofroute.js launch --core');
   assert.equal(report.commands.publicLaunch, 'node ./bin/proofroute.js launch --check-public');
   assert.equal(report.commands.coreReleasePack, 'node ./bin/proofroute.js release --core --out proofroute-release-pack');
@@ -40,6 +41,7 @@ test('repository profile keeps public metadata executable and shareable', async 
   assert.match(output, /badges/);
   assert.match(output, /short pitch/);
   assert.match(output, /public face/);
+  assert.match(output, /publish gate/);
   assert.match(output, /public launch/);
   assert.match(output, /public preflight/);
   assert.match(output, /npm dry run/);
@@ -59,6 +61,7 @@ test('profile command emits machine-readable repository face metadata', () => {
   assert.equal(report.github.topics.length, 20);
   assert.equal(report.commands.publicFace, 'node ./bin/proofroute.js profile --check-public');
   assert.equal(report.commands.npmDryRun, 'npm run release:npm:dry-run');
+  assert.equal(report.commands.publishPreflight, 'node ./bin/proofroute.js publish --check-public --check-actions');
   assert.equal(report.commands.coreLaunch, 'node ./bin/proofroute.js launch --core');
   assert.equal(report.commands.publicLaunch, 'node ./bin/proofroute.js launch --check-public');
   assert.equal(report.commands.coreReleasePack, 'node ./bin/proofroute.js release --core --out proofroute-release-pack');
