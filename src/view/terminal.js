@@ -49,6 +49,7 @@ export function renderHelp() {
     '  proofroute release --out proofroute-release-pack --check-github --check-public --require-evidence --evidence classifier-evidence.json --max-evidence-age-hours 24',
     '  proofroute publish --check-public --check-actions',
     '  proofroute publish --check-public --check-actions --probe-actions-dispatch',
+    '  proofroute publish --check-public --check-actions --probe-actions-dispatch --support-note',
     '  proofroute publish --npm /tmp/proofroute-npm-cli/bin/npm-cli.js --check-public',
     '  proofroute smoke',
     '  proofroute smoke --proxy',
@@ -96,7 +97,7 @@ export function renderHelp() {
     '  profile Print repository About copy, GitHub topics, README badges, npm metadata, launch pitch, proof commands, and optional GitHub drift checks.',
     '  launch  Run the local launch readiness proof across repository face, demo proof, proxy smoke, privacy, assets, and classifier evidence.',
     '  release Write a prompt-free release proof pack with readiness JSON, repository metadata, git provenance, launch copy, and SVG proof assets.',
-    '  publish Check the npm CLI, package tarball, publish dry-run, npm auth, public face, and optional GitHub Actions evidence.',
+    '  publish Check npm, package, public face, GitHub Actions evidence, and plain support notes while --json keeps JSON priority.',
     '  smoke   Run a local fake-provider execution loop through the Agent runtime or the transparent proxy.',
     '  bench   Run a zero-network local benchmark that makes routing value visible immediately.',
     '  calibrate Run a local prompt suite and show intent accuracy, savings, and p95 routing latency.',
@@ -133,6 +134,7 @@ export function renderRepositoryProfile(report) {
     `${pad('public face', 16)} ${report.commands.publicFace}`,
     `${pad('npm dry run', 16)} ${report.commands.npmDryRun}`,
     `${pad('publish gate', 16)} ${report.commands.publishPreflight}`,
+    `${pad('support note', 16)} ${report.commands.publishSupportNote}`,
     `${pad('core launch', 16)} ${report.commands.coreLaunch}`,
     `${pad('public launch', 16)} ${report.commands.publicLaunch}`,
     `${pad('core pack', 16)} ${report.commands.coreReleasePack}`,
@@ -272,6 +274,34 @@ export function renderPublishReadiness(report) {
     '',
     ...rows,
     ...(blockers.length > 0 ? ['', `${BOLD}next actions${RESET}`, ...blockers] : [])
+  ].join('\n');
+}
+
+export function renderPublishSupportNote(report) {
+  const blockers = report.blockers ?? [];
+  const nextActions = report.nextActions ?? [];
+  const supportMessages = blockers.map((blocker) => supportNoteText(blocker.supportMessage)).filter(Boolean);
+  const evidence = blockers.map((blocker) => `${supportNoteText(blocker.id)}: ${supportNoteText(blocker.detail)}`);
+  const actionLines = nextActions.map((action) => {
+    const command = action.command ? ` Command: ${supportNoteText(action.command)}` : '';
+    return `${supportNoteText(action.forBlocker)}: ${supportNoteText(action.summary)}${command}`;
+  });
+  return [
+    'ProofRoute publish support note',
+    `Generated at ${supportNoteText(report.generatedAt ?? 'unknown time')}.`,
+    `Package ${supportNoteText(report.package?.name ?? 'unknown')}@${supportNoteText(report.package?.version ?? 'unknown')} for repository ${supportNoteText(report.package?.repository ?? 'unknown repository')}.`,
+    `Publish preflight status is ${supportNoteText(report.status ?? 'unknown')}.`,
+    `Authenticated GitHub repository state is ${report.github?.summary?.pass ? 'public' : 'not proven public'}.`,
+    `Anonymous public face state is ${supportNoteText(report.public?.status ?? 'not checked')}.`,
+    `GitHub account visibility blocker is ${supportNoteText(report.account?.blocker ?? 'not detected')}.`,
+    `GitHub Actions state is ${report.actions?.summary?.pass ? 'passing' : report.actions ? 'not ready' : 'not checked'}.`,
+    '',
+    'Blockers',
+    ...(evidence.length > 0 ? evidence : ['No publish blockers were detected by this run.']),
+    '',
+    'Next actions',
+    ...(actionLines.length > 0 ? actionLines : ['No next actions are required by this run.']),
+    ...(supportMessages.length > 0 ? ['', 'Support message', ...supportMessages] : [])
   ].join('\n');
 }
 
@@ -1179,6 +1209,30 @@ function compactText(value, width) {
   const text = String(value).replace(/\s+/g, ' ').trim();
   if (text.length <= width) return text;
   return `${text.slice(0, Math.max(0, width - 1))}…`;
+}
+
+function supportNoteText(value) {
+  return redactSupportSecrets(String(value ?? '')
+    .replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g, '')
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim());
+}
+
+function redactSupportSecrets(value) {
+  return String(value)
+    .replace(/([a-z][a-z0-9+.-]*:\/\/)([^@\s/?#]+)@/gi, '$1<redacted>@')
+    .replace(/([?&][^=\s&]*(?:token|secret|password|key|auth)[^=\s&]*=)[^&\s]+/gi, '$1<redacted>')
+    .replace(/\b[A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|KEY|AUTH)[A-Z0-9_]*=(["']?)[^\s"'&]+/gi, '<redacted-secret>')
+    .replace(/\b(?:_?authToken|authorization|password|secret|token|api[_-]?key)=([^\s&]+)/gi, '<redacted-secret>')
+    .replace(/\b(Authorization:\s*Bearer\s+)[^\s]+/gi, '$1<redacted>')
+    .replace(/\b(Bearer\s+)[A-Za-z0-9._~+/=-]+/gi, '$1<redacted>')
+    .replace(/\bsk-[A-Za-z0-9_-]{6,}\b/g, 'sk-<redacted>')
+    .replace(/\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{20,}\b/g, 'gh-<redacted>')
+    .replace(/\bgithub_pat_[A-Za-z0-9_]{20,}\b/g, 'github_pat_<redacted>')
+    .replace(/\/Users\/[^/\s]+(?:\/[^\s`'"]*)?/g, '<local-path>')
+    .replace(/\/home\/[^/\s]+(?:\/[^\s`'"]*)?/g, '<local-path>')
+    .replace(/[A-Z]:\\Users\\[^\\\s]+(?:\\[^\s`'"]*)?/g, '<local-path>');
 }
 
 function compactSvgText(value, width) {

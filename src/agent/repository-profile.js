@@ -85,6 +85,7 @@ const commands = {
   publicFace: 'node ./bin/proofroute.js profile --check-public',
   npmDryRun: 'npm run release:npm:dry-run',
   publishPreflight: 'node ./bin/proofroute.js publish --check-public --check-actions',
+  publishSupportNote: 'node ./bin/proofroute.js publish --check-public --check-actions --probe-actions-dispatch --support-note',
   coreLaunch: 'node ./bin/proofroute.js launch --core',
   publicLaunch: 'node ./bin/proofroute.js launch --check-public',
   launchReadiness: 'node ./bin/proofroute.js launch',

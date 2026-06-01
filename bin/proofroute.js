@@ -19,7 +19,7 @@ import { exportTunedConfig, tuneFromEvents } from '../src/agent/tuner.js';
 import { demoCatalog, mergeConfig, readConfig } from '../src/config.js';
 import { ExternalClassifier } from '../src/controller/gpu-classifier.js';
 import { RouteController } from '../src/controller/route-controller.js';
-import { renderAgentExecution, renderAgentPlan, renderCalibration, renderClassifierBenchmark, renderClassifierEvidenceVerification, renderClassifierMetrics, renderClassifierSvg, renderConnect, renderConnectShell, renderDecision, renderDashboard, renderDoctor, renderGithubRepositoryState, renderHelp, renderIntentTraining, renderJson, renderLaunchDemo, renderLaunchReadiness, renderModelCatalog, renderPrivacy, renderProofGate, renderPublicRepositoryFace, renderPublishReadiness, renderReleasePreflight, renderReleaseProofPack, renderRepositoryProfile, renderRouteTrace, renderShare, renderShareMarkdown, renderShareSvg, renderSmoke, renderStats, renderTune } from '../src/view/terminal.js';
+import { renderAgentExecution, renderAgentPlan, renderCalibration, renderClassifierBenchmark, renderClassifierEvidenceVerification, renderClassifierMetrics, renderClassifierSvg, renderConnect, renderConnectShell, renderDecision, renderDashboard, renderDoctor, renderGithubRepositoryState, renderHelp, renderIntentTraining, renderJson, renderLaunchDemo, renderLaunchReadiness, renderModelCatalog, renderPrivacy, renderProofGate, renderPublicRepositoryFace, renderPublishReadiness, renderPublishSupportNote, renderReleasePreflight, renderReleaseProofPack, renderRepositoryProfile, renderRouteTrace, renderShare, renderShareMarkdown, renderShareSvg, renderSmoke, renderStats, renderTune } from '../src/view/terminal.js';
 
 const command = process.argv[2] ?? 'help';
 const args = parseArgs(process.argv.slice(3));
@@ -180,7 +180,8 @@ try {
       actionsRef: args['actions-ref'] ?? args.actionsRef ?? args.ref,
       repo: args.repo ?? args['github-repo'] ?? args.githubRepo
     });
-    console.log(args.json ? renderJson(report) : renderPublishReadiness(report));
+    const supportNote = truthy(args['support-note'] ?? args.supportNote);
+    console.log(args.json ? renderJson(report) : supportNote ? renderPublishSupportNote(report) : renderPublishReadiness(report));
     if (report.status === 'fail') process.exitCode = 1;
   } else if (command === 'smoke') {
     const report = await runSmokeTest({ prompt: args.prompt, policy: args.policy, throughProxy: Boolean(args.proxy) });

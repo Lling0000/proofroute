@@ -1,7 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { publishReadinessReport } from '../src/agent/publish-readiness.js';
-import { renderPublishReadiness } from '../src/view/terminal.js';
+import { renderPublishReadiness, renderPublishSupportNote } from '../src/view/terminal.js';
 
 test('publish readiness passes when package, npm, auth, and Actions evidence are present', async () => {
   const report = await publishReadinessReport({
@@ -106,6 +110,102 @@ test('publish readiness reports account-level GitHub visibility blockers', async
   const output = renderPublishReadiness(report);
   assert.match(output, /account_flagged_as_spammy/);
   assert.match(output, /next actions/);
+  const supportNote = renderPublishSupportNote(report);
+  assert.match(supportNote, /My account owns Lling0000\/proofroute/);
+  assert.match(supportNote, /flagged as spammy/);
+  assert.doesNotMatch(supportNote, /Actions has been disabled for this user/);
+  assert.doesNotMatch(supportNote, /PUBLISH READINESS|\x1b\[/);
+  assert.doesNotMatch(supportNote, /NODE_AUTH_TOKEN|secret-token/);
+});
+
+test('publish support note includes Actions restrictions only with dispatch evidence', async () => {
+  const report = await publishReadinessReport({
+    checkPublic: true,
+    checkActions: true,
+    probeActionsDispatch: true,
+    runner: fakePublishRunner({
+      auth: true,
+      accountSearchError: 'User flagged as spammy',
+      dispatchError: 'Actions has been disabled for this user'
+    }),
+    fetchImpl: fakePublicFaceFetch({
+      githubOwnerStatus: 404,
+      githubStatus: 404,
+      npmStatus: 404
+    })
+  });
+  const supportNote = renderPublishSupportNote(report);
+  assert.match(supportNote, /My account owns Lling0000\/proofroute/);
+  assert.match(supportNote, /flagged as spammy/);
+  assert.match(supportNote, /Actions has been disabled for this user/);
+  assert.ok(report.blockers.some((blocker) => blocker.id === 'github_actions_disabled'));
+  assert.doesNotMatch(supportNote, /PUBLISH READINESS|\x1b\[/);
+  assert.doesNotMatch(supportNote, /NODE_AUTH_TOKEN|secret-token/);
+});
+
+test('publish support note redacts secrets and terminal control codes', () => {
+  const supportNote = renderPublishSupportNote({
+    generatedAt: '2026-06-01T00:00:00.000Z',
+    status: 'fail',
+    package: {
+      name: 'proofroute',
+      version: '0.1.0',
+      repository: 'https://user:pass@github.com/Lling0000/proofroute'
+    },
+    blockers: [{
+      id: 'npm_auth_missing',
+      detail: 'npm auth failed at https://user:pass@registry.npmjs.org/?_authToken=secret-token /Users/alice/.npm/_logs/debug.log \x1b[31mred',
+      supportMessage: 'Authorization: Bearer sk-secret-production-key NODE_AUTH_TOKEN=secret-token github_pat_123456789012345678901234567890'
+    }],
+    nextActions: [{
+      forBlocker: 'npm_auth_missing',
+      summary: 'Run NODE_AUTH_TOKEN=secret-token npm login --registry https://user:pass@registry.npmjs.org/?token=secret-token',
+      command: 'NODE_AUTH_TOKEN=secret-token npm login --registry https://user:pass@registry.npmjs.org/?token=secret-token'
+    }]
+  });
+  assert.match(supportNote, /<redacted>/);
+  assert.doesNotMatch(supportNote, /secret-token|user:pass|sk-secret-production-key|\/Users\/alice|\x1b\[31m|github_pat_123456789012345678901234567890/);
+});
+
+test('publish CLI renders support note while json keeps priority', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'proofroute-publish-'));
+  const npmPath = join(dir, 'npm-fake.mjs');
+  const pack = JSON.stringify([fakePackReport()]);
+  await writeFile(npmPath, `#!/usr/bin/env node
+const args = process.argv.slice(2);
+if (args[0] === '--version') {
+  console.log('11.16.0');
+} else if (args[0] === 'pack') {
+  console.log(${JSON.stringify(pack)});
+} else if (args[0] === 'publish') {
+  console.log('+ proofroute@0.1.0');
+} else if (args[0] === 'whoami') {
+  console.error('npm error code ENEEDAUTH');
+  process.exit(1);
+} else {
+  console.error('unexpected fake npm command ' + args.join(' '));
+  process.exit(2);
+}
+`, 'utf8');
+  await chmod(npmPath, 0o755);
+  try {
+    const support = spawnSync(process.execPath, ['./bin/proofroute.js', 'publish', '--npm', npmPath, '--support-note'], {
+      cwd: new URL('..', import.meta.url),
+      encoding: 'utf8'
+    });
+    assert.equal(support.status, 1);
+    assert.match(support.stdout, /ProofRoute publish support note/);
+    assert.doesNotMatch(support.stdout, /PUBLISH READINESS|\x1b\[/);
+    const json = spawnSync(process.execPath, ['./bin/proofroute.js', 'publish', '--npm', npmPath, '--support-note', '--json'], {
+      cwd: new URL('..', import.meta.url),
+      encoding: 'utf8'
+    });
+    assert.equal(json.status, 1);
+    assert.doesNotMatch(json.stdout, /ProofRoute publish support note/);
+    assert.equal(JSON.parse(json.stdout).kind, 'proofroute-publish-readiness-v1');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 test('publish readiness reports a missing npm CLI before package commands run', async () => {

@@ -349,7 +349,7 @@ function publishBlockers({ npm, account, publicFace, actions, repository, npmCom
         query: account.query
       },
       nextAction: flagged ? 'Open GitHub account settings and Support for Lling0000; ask GitHub to review the account-level spam or visibility restriction before expecting anonymous repo access to work.' : `Confirm that authenticated GitHub search can find ${repository} through ${account.query}, then rerun the public preflight.`,
-      supportMessage: flagged ? githubSupportMessage({ repository }) : undefined
+      supportMessage: flagged ? githubSupportMessage({ repository, publicFace, actions }) : undefined
     });
   }
   if (publicFace?.status === 'fail') {
@@ -372,8 +372,7 @@ function publishBlockers({ npm, account, publicFace, actions, repository, npmCom
     });
   }
   if (actions?.summary && !actions.summary.pass) {
-    const dispatchMessage = `${actions.dispatch?.stderr ?? ''} ${actions.dispatch?.message ?? ''}`;
-    const userDisabled = /Actions has been disabled for this user/i.test(dispatchMessage);
+    const userDisabled = actionsUserDisabled(actions);
     blockers.push({
       id: userDisabled ? 'github_actions_disabled' : 'github_actions_not_passing',
       source: 'actions',
@@ -391,8 +390,26 @@ function publishBlockers({ npm, account, publicFace, actions, repository, npmCom
   return blockers;
 }
 
-function githubSupportMessage({ repository }) {
-  return `My account owns ${repository}. Authenticated GitHub API shows this repository is public and private=false, but anonymous API access to the owner or repository returns 404 and authenticated repository search reports that the user is flagged as spammy. GitHub Actions repository permissions are enabled, but workflow dispatch reports that Actions has been disabled for this user. Please review the account-level visibility and Actions restrictions.`;
+function actionsUserDisabled(actions) {
+  const dispatchMessage = `${actions?.dispatch?.stderr ?? ''} ${actions?.dispatch?.message ?? ''}`;
+  return /Actions has been disabled for this user/i.test(dispatchMessage);
+}
+
+function githubSupportMessage({ repository, publicFace, actions }) {
+  const anonymous404 = [publicFace?.github?.owner?.status, publicFace?.github?.status].some((status) => status === 404);
+  const publicEvidence = anonymous404
+    ? 'Anonymous API access to the owner or repository returns 404.'
+    : `Anonymous public visibility from this run is owner ${publicFace?.github?.owner?.status ?? 'unknown'} and repository ${publicFace?.github?.status ?? 'unknown'}.`;
+  const actionsEvidence = actionsUserDisabled(actions)
+    ? 'GitHub Actions repository permissions are enabled, but workflow dispatch reports that Actions has been disabled for this user.'
+    : undefined;
+  return [
+    `My account owns ${repository}.`,
+    'Authenticated GitHub API shows this repository is public and private=false, but authenticated repository search reports that the user is flagged as spammy.',
+    publicEvidence,
+    actionsEvidence,
+    'Please review the account-level visibility restriction and any account-level Actions restriction shown in the attached publish preflight evidence.'
+  ].filter(Boolean).join(' ');
 }
 
 async function runNpm({ npmCommand, args, cwd, runner }) {
