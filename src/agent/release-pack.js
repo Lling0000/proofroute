@@ -118,6 +118,8 @@ export async function releaseProofPack({ controller, runtime, outDir = 'proofrou
       proof: launch.proof,
       github: launch.github,
       public: launch.public,
+      smoke: launch.smoke,
+      smokeMatrix: launch.smokeMatrix,
       privacy: launch.privacy,
       evidence: launch.evidence,
       artifactEvidence: launch.artifactEvidence
@@ -213,6 +215,8 @@ export async function releasePreflightReport({ controller, runtime, outDir = 'pr
       proof: launch.proof,
       github: launch.github,
       public: launch.public,
+      smoke: launch.smoke,
+      smokeMatrix: launch.smokeMatrix,
       privacy: launch.privacy,
       evidence: launch.evidence,
       artifactEvidence: launch.artifactEvidence
@@ -326,6 +330,7 @@ function releaseMarkdown({ profile, launch, assetCopies, git, generatedAt }) {
   const proof = launch.proof?.aggregate ?? {};
   const github = launch.github ? ` The live GitHub repository face check is ${launch.github.status}, with description, homepage, and topics compared against the local profile.` : '';
   const publicFace = launch.public ? ` The no-credential public face check is ${launch.public.status}, with owner status ${launch.public.github?.owner?.status ?? 'unknown'}, GitHub repository status ${launch.public.github?.status ?? 'unknown'}, and npm status ${launch.public.npm?.status ?? 'unknown'}.` : '';
+  const proxyProof = releaseProxyProofText(launch);
   const evidenceText = releaseEvidenceText(launch.evidence, launch.artifactEvidence);
   const freshness = releaseEvidenceFreshness(launch.evidence, launch.artifactEvidence);
   const source = gitMarkdown(git);
@@ -333,7 +338,7 @@ function releaseMarkdown({ profile, launch, assetCopies, git, generatedAt }) {
   return [
     '# ProofRoute Release Proof',
     '',
-    `ProofRoute release proof generated at ${generatedAt} finished with ${launch.status.toUpperCase()} launch status. The repository face is ${profile.github.description} The local proof routed ${proof.count ?? 0} synthetic launch-suite requests with ${ms(proof.p95RouterMs)} p95 router latency, ${percent(proof.p95RouterOverheadPct)} router overhead, ${speed(proof.averageSpeedup)} speed lift, and ${money(proof.savingsUsd)} estimated savings while keeping prompt and completion text out of the release artifact.${github}${publicFace}${source} The privacy audit status is ${launch.privacy?.status ?? 'unknown'}, ${assets} SVG proof assets were copied into this pack, and ${evidenceText}.${freshness} A strict accelerator claim should only be published when classifier evidence verifies as pass, records nvidia-smi hardware profiles, is fresh for the release window, and the launch readiness status is pass.`
+    `ProofRoute release proof generated at ${generatedAt} finished with ${launch.status.toUpperCase()} launch status. The repository face is ${profile.github.description} The local proof routed ${proof.count ?? 0} synthetic launch-suite requests with ${ms(proof.p95RouterMs)} p95 router latency, ${percent(proof.p95RouterOverheadPct)} router overhead, ${speed(proof.averageSpeedup)} speed lift, and ${money(proof.savingsUsd)} estimated savings while keeping prompt and completion text out of the release artifact.${proxyProof}${github}${publicFace}${source} The privacy audit status is ${launch.privacy?.status ?? 'unknown'}, ${assets} SVG proof assets were copied into this pack, and ${evidenceText}.${freshness} A strict accelerator claim should only be published when classifier evidence verifies as pass, records nvidia-smi hardware profiles, is fresh for the release window, and the launch readiness status is pass.`
   ].join('\n');
 }
 
@@ -342,17 +347,26 @@ function launchCopyMarkdown({ profile, launch, git, generatedAt }) {
   const source = git?.available ? ` The source proof is branch ${git.branch} at ${git.shortCommit}, with ${git.dirty ? `${git.changedFileCount} dirty paths recorded before packaging` : 'a clean working tree recorded before packaging'}.` : '';
   const github = launch.github ? ` The live GitHub repository face check is ${launch.github.status}.` : '';
   const publicFace = launch.public ? ` The no-credential public face check is ${launch.public.status}.` : '';
+  const proxyProof = launch.smokeMatrix ? ` The transparent proxy matrix proves ${launch.smokeMatrix.passed ?? 0}/${launch.smokeMatrix.count ?? 0} intent, context, and cost scenarios through one local OpenAI-compatible entrypoint with prompt-free ledger privacy ${launch.smokeMatrix.privacyStatus ?? 'unknown'}.` : '';
   const evidenceText = launchCopyEvidenceText(launch.evidence, launch.artifactEvidence);
   const freshness = launchCopyEvidenceFreshness(launch.evidence, launch.artifactEvidence);
   return [
     '# ProofRoute Launch Copy',
     '',
-    `GitHub release paragraph generated at ${generatedAt}: ${profile.social.shortPitch} The latest local release proof routed ${proof.count ?? 0} prompt-free launch-suite requests with ${ms(proof.p95RouterMs)} p95 router latency, ${percent(proof.p95RouterOverheadPct)} router overhead, ${speed(proof.averageSpeedup)} speed lift, and ${money(proof.savingsUsd)} estimated savings. The first command stays ` + '`node ./bin/proofroute.js demo`' + ` so curiosity converts into a local receipt instead of a vague promise.${github}${publicFace}${source}`,
+    `GitHub release paragraph generated at ${generatedAt}: ${profile.social.shortPitch} The latest local release proof routed ${proof.count ?? 0} prompt-free launch-suite requests with ${ms(proof.p95RouterMs)} p95 router latency, ${percent(proof.p95RouterOverheadPct)} router overhead, ${speed(proof.averageSpeedup)} speed lift, and ${money(proof.savingsUsd)} estimated savings.${proxyProof} The first command stays ` + '`node ./bin/proofroute.js demo`' + ` so curiosity converts into a local receipt instead of a vague promise.${github}${publicFace}${source}`,
     '',
     `Vibe Coding paragraph: ${profile.social.vibePitch} The shareable receipt is generated by ` + '`node ./bin/proofroute.js share --svg --out docs/proofroute-terminal.svg`' + `, while the release proof pack keeps repository metadata, source provenance, privacy status, proof assets, and classifier evidence status together without logging prompt text.`,
     '',
     `Hardware claim paragraph: publish CUDA, TensorRT, or multi-GPU accelerator claims only when ` + '`node ./bin/proofroute.js release --out proofroute-release-pack --check-github --check-public --require-evidence --evidence classifier-evidence.json --max-evidence-age-hours 24`' + ` passes. The current classifier evidence status is ${evidenceText}.${freshness}`
   ].join('\n');
+}
+
+function releaseProxyProofText(launch) {
+  const smoke = launch.smoke;
+  const matrix = launch.smokeMatrix;
+  const smokeText = smoke ? ` The transparent proxy smoke is ${smoke.status ?? 'unknown'}, routing ${smoke.requestedModel ?? 'none'} to ${smoke.model ?? 'none'} with browser proof ${smoke.browserProofHeaders ? 'readable' : 'missing'}.` : '';
+  const matrixText = matrix ? ` The proxy matrix is ${matrix.status ?? 'unknown'} across ${matrix.passed ?? 0}/${matrix.count ?? 0} scenarios, with ${matrix.modelSwaps ?? 0}/${matrix.count ?? 0} model swaps, axes ${compactCounts(matrix.proofs)}, and prompt-free ledger privacy ${matrix.privacyStatus ?? 'unknown'}.` : '';
+  return `${smokeText}${matrixText}`;
 }
 
 function releaseEvidenceText(evidence, artifactEvidence) {
@@ -364,6 +378,10 @@ function releaseEvidenceText(evidence, artifactEvidence) {
     ? `local artifact evidence status is pass at ${artifactEvidence.path}, verifying the hashed classifier model artifact without asserting CUDA, TensorRT, or multi-GPU hardware`
     : `local artifact evidence status is ${artifactEvidence.status ?? 'unknown'} at ${artifactEvidence.path ?? 'classifier-linear-evidence.json'}`;
   return `${classifierEvidence}, and ${artifactText}`;
+}
+
+function compactCounts(values = {}) {
+  return Object.entries(values).map(([key, value]) => `${key}:${value}`).join(',') || 'none';
 }
 
 function releaseEvidenceFreshness(evidence, artifactEvidence) {

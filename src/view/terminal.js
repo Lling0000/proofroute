@@ -104,7 +104,7 @@ export function renderHelp() {
     '  connect Print the drop-in OpenAI-compatible base URL, env exports, and proxy smoke commands.',
     '  models  Render the configured catalog as a terminal map of executability, economics, context, and intent leaders.',
     '  profile Print repository About copy, GitHub topics, README badges, npm metadata, launch pitch, proof commands, and optional GitHub drift checks.',
-    '  launch  Run the local launch readiness proof across repository face, demo proof, proxy smoke, privacy, assets, and classifier evidence.',
+    '  launch  Run the local launch readiness proof across repository face, demo proof, proxy smoke, proxy matrix, privacy, assets, and classifier evidence.',
     '  release Write a prompt-free release proof pack with readiness JSON, repository metadata, git provenance, launch copy, and SVG proof assets.',
     '  publish Check npm, package, public face, GitHub Actions evidence, plain support notes, and redacted support packs while --json keeps JSON priority.',
     '  smoke   Run a local fake-provider execution loop through the Agent runtime, the transparent proxy, or a proxy routing matrix.',
@@ -344,6 +344,7 @@ export function renderLaunchReadiness(report) {
   });
   const proof = report.proof?.aggregate ?? {};
   const smoke = report.smoke ?? {};
+  const smokeMatrix = report.smokeMatrix ?? {};
   const privacy = report.privacy ?? {};
   const evidence = report.evidence ?? {};
   const evidenceAge = evidence.evidenceAgeMs === undefined ? '' : ` age ${(Number(evidence.evidenceAgeMs) / 3600000).toFixed(2)}h`;
@@ -359,6 +360,7 @@ export function renderLaunchReadiness(report) {
     `${BOLD}${mark}${RESET} ${DIM}local zero-network launch proof for repository face, routing value, proxy compatibility, privacy boundary, share assets, and classifier evidence.${RESET}`,
     `${GREEN}${money(proof.savingsUsd ?? 0)} saved${RESET}, ${MAGENTA}${Number(proof.averageSpeedup ?? 0).toFixed(2)}x${RESET} speedup, ${YELLOW}${ms(Number(proof.p95RouterMs ?? 0))}${RESET} p95 router, ${YELLOW}${percent(proof.p95RouterOverheadPct ?? 0)}${RESET} overhead, ${CYAN}${report.profile?.topicCount ?? 0}${RESET} GitHub topics.`,
     `${pad('proxy smoke', 16)} ${smoke.status ?? 'unknown'} ${smoke.requestedModel ?? 'none'}->${smoke.model ?? 'none'} swap ${smoke.modelSwap ?? 'false'} browser ${smoke.browserProofHeaders ? 'readable' : 'unknown'}`,
+    `${pad('proxy matrix', 16)} ${smokeMatrix.status ?? 'skipped'} ${smokeMatrix.passed ?? 0}/${smokeMatrix.count ?? 0} scenarios swaps ${smokeMatrix.modelSwaps ?? 0}/${smokeMatrix.count ?? 0} privacy ${smokeMatrix.privacyStatus ?? 'unknown'} ledger ${smokeMatrix.promptFreeLedger ? 'prompt-free' : 'unknown'} browser ${smokeMatrix.browserProofHeaders ? 'readable' : 'unknown'}`,
     ...(github ? [`${pad('github face', 16)} ${github.status ?? 'unknown'} ${github.repository ?? 'unresolved'}`] : []),
     ...(publicFace ? [`${pad('public face', 16)} ${publicFace.status ?? 'unknown'} owner ${publicFace.github?.owner?.status ?? 'unknown'} github ${publicFace.github?.status ?? 'unknown'} npm ${publicFace.npm?.status ?? 'unknown'}`] : []),
     `${pad('privacy', 16)} ${privacy.status ?? 'unknown'} ${privacy.events ?? 0} events, ${privacy.forbiddenMatchCount ?? 0} forbidden fields, ${privacy.parseErrorCount ?? 0} parse errors`,

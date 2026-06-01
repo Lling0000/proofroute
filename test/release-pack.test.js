@@ -13,6 +13,9 @@ import { demoCatalog } from '../src/config.js';
 import { RouteController } from '../src/controller/route-controller.js';
 import { renderHelp, renderReleasePreflight, renderReleaseProofPack } from '../src/view/terminal.js';
 
+const promptLeakPattern = /Refactor this webhook|Extract customer ids|Rewrite this README|Refactor this TypeScript|Rewrite this launch|Audit this repository|customer ids|stacktrace|Bearer smoke-key/;
+const secretLeakPattern = /secret-token|Refactor this webhook|Extract customer ids|Rewrite this README|Refactor this TypeScript|Rewrite this launch|Audit this repository|customer ids|stacktrace|Bearer smoke-key/;
+
 test('release proof pack writes prompt-free launch evidence and assets', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'proofroute-release-pack-'));
   const outDir = join(dir, 'pack');
@@ -63,7 +66,7 @@ test('release proof pack writes prompt-free launch evidence and assets', async (
     assert.match(renderHelp(), /proofroute release/);
     assert.match(launchCopy, /ProofRoute Launch Copy/);
     assert.match(launchCopy, /Vibe Coding paragraph/);
-    assert.doesNotMatch(`${JSON.stringify(report)}\n${markdown}\n${launchCopy}\n${output}`, /secret-token|Refactor this webhook|Extract customer ids|Rewrite this README/);
+    assert.doesNotMatch(`${JSON.stringify(report)}\n${markdown}\n${launchCopy}\n${output}`, secretLeakPattern);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -101,7 +104,7 @@ test('release proof pack fails stale classifier evidence when freshness is requi
     const markdown = await readFile(join(outDir, 'proofroute-release.md'), 'utf8');
     const launchCopy = await readFile(join(outDir, 'launch-copy.md'), 'utf8');
     const output = renderReleaseProofPack(report);
-    assert.doesNotMatch(`${JSON.stringify(report)}\n${markdown}\n${launchCopy}\n${output}`, /Refactor this webhook|Extract customer ids|Rewrite this README/);
+    assert.doesNotMatch(`${JSON.stringify(report)}\n${markdown}\n${launchCopy}\n${output}`, promptLeakPattern);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -126,11 +129,18 @@ test('core release proof pack passes without accelerator evidence', async () => 
     assert.equal(report.status, 'pass');
     assert.equal(report.core, true);
     assert.equal(report.launch.evidence.status, 'not_claimed');
+    assert.equal(report.launch.smokeMatrix.status, 'pass');
+    assert.equal(report.launch.smokeMatrix.passed, 4);
+    assert.equal(report.launch.smokeMatrix.privacyStatus, 'pass');
     assert.equal(report.launch.checks.find((check) => check.id === 'classifier_evidence').status, 'pass');
+    assert.equal(report.launch.checks.find((check) => check.id === 'proxy_matrix').status, 'pass');
     assert.ok(report.evidenceFiles.some((file) => file.status === 'not_claimed'));
+    const markdown = await readFile(join(outDir, 'proofroute-release.md'), 'utf8');
     const launchCopy = await readFile(join(outDir, 'launch-copy.md'), 'utf8');
+    assert.match(markdown, /proxy matrix is pass across 4\/4 scenarios/);
     assert.match(launchCopy, /no CUDA, TensorRT, or multi-GPU claim/);
-    assert.doesNotMatch(`${JSON.stringify(report)}\n${launchCopy}`, /Refactor this webhook|Extract customer ids|Rewrite this README/);
+    assert.match(launchCopy, /transparent proxy matrix proves 4\/4 intent, context, and cost scenarios/);
+    assert.doesNotMatch(`${JSON.stringify(report)}\n${markdown}\n${launchCopy}`, promptLeakPattern);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -176,7 +186,7 @@ test('core release proof pack can require local artifact evidence without hardwa
     assert.equal(verification.checks.some((check) => check.id === 'hardware_probe'), false);
     const launchCopy = await readFile(join(outDir, 'launch-copy.md'), 'utf8');
     assert.match(launchCopy, /local artifact proof is pass and makes no hardware claim/);
-    assert.doesNotMatch(`${JSON.stringify(report)}\n${launchCopy}`, /Refactor this webhook|Extract customer ids|Rewrite this README/);
+    assert.doesNotMatch(`${JSON.stringify(report)}\n${launchCopy}`, promptLeakPattern);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -243,7 +253,7 @@ test('release preflight reports strict hardware blockers without writing pack fi
     assert.match(output, /RELEASE PREFLIGHT/);
     assert.match(output, /hardware proof/);
     assert.match(output, /hardware_probe/);
-    assert.doesNotMatch(`${JSON.stringify(report)}\n${output}`, /Refactor this webhook|Extract customer ids|Rewrite this README/);
+    assert.doesNotMatch(`${JSON.stringify(report)}\n${output}`, promptLeakPattern);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -280,7 +290,7 @@ test('release preflight fails explicit public face gate on anonymous GitHub or n
     assert.equal(existsSync(outDir), false);
     const output = renderReleasePreflight(report);
     assert.match(output, /public face/);
-    assert.doesNotMatch(`${JSON.stringify(report)}\n${output}`, /Refactor this webhook|Extract customer ids|Rewrite this README/);
+    assert.doesNotMatch(`${JSON.stringify(report)}\n${output}`, promptLeakPattern);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -301,7 +311,7 @@ test('release command emits machine-readable proof pack report', async () => {
     assert.equal(report.status, 'warn');
     assert.ok(report.files.some((file) => file.endsWith('proofroute-release.md')));
     assert.ok(report.files.some((file) => file.endsWith('launch-copy.md')));
-    assert.doesNotMatch(result.stdout, /Refactor this webhook|Extract customer ids|Rewrite this README/);
+    assert.doesNotMatch(result.stdout, promptLeakPattern);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -324,6 +334,12 @@ test('release command preflight emits blockers without creating pack directory',
     assert.equal(report.status, 'fail');
     assert.equal(existsSync(outDir), false);
     assert.equal(report.launch.evidence.failedChecks.some((check) => check.id === 'hardware_probe'), true);
+    assert.equal(report.launch.checks.find((check) => check.id === 'proxy_smoke').status, 'warn');
+    assert.match(report.launch.checks.find((check) => check.id === 'proxy_smoke').detail, /skipped/);
+    assert.equal(report.launch.checks.find((check) => check.id === 'proxy_matrix').status, 'warn');
+    assert.match(report.launch.checks.find((check) => check.id === 'proxy_matrix').detail, /skipped/);
+    assert.equal(report.launch.smoke, undefined);
+    assert.equal(report.launch.smokeMatrix, undefined);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -345,9 +361,12 @@ test('release command preflight skips proxy smoke unless explicitly requested', 
     assert.equal(report.kind, 'proofroute-release-preflight-v1');
     assert.equal(report.launch.checks.find((check) => check.id === 'proxy_smoke').status, 'warn');
     assert.match(report.launch.checks.find((check) => check.id === 'proxy_smoke').detail, /skipped/);
+    assert.equal(report.launch.checks.find((check) => check.id === 'proxy_matrix').status, 'warn');
+    assert.match(report.launch.checks.find((check) => check.id === 'proxy_matrix').detail, /skipped/);
     assert.equal(report.launch.smoke, undefined);
+    assert.equal(report.launch.smokeMatrix, undefined);
     assert.equal(existsSync(outDir), false);
-    assert.doesNotMatch(result.stdout, /Refactor this webhook|Extract customer ids|Rewrite this README/);
+    assert.doesNotMatch(result.stdout, promptLeakPattern);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -370,7 +389,7 @@ test('release command core artifact mode emits machine-readable proof pack', asy
     assert.equal(report.launch.evidence.status, 'not_claimed');
     assert.equal(report.launch.artifactEvidence.status, 'pass');
     assert.ok(report.files.some((file) => file.endsWith('classifier-artifact-evidence-verify.json')));
-    assert.doesNotMatch(result.stdout, /Refactor this webhook|Extract customer ids|Rewrite this README/);
+    assert.doesNotMatch(result.stdout, promptLeakPattern);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -390,7 +409,7 @@ test('release command core mode emits no-accelerator-claim proof pack', async ()
     assert.equal(report.core, true);
     assert.equal(report.launch.evidence.status, 'not_claimed');
     assert.ok(report.files.some((file) => file.endsWith('launch-copy.md')));
-    assert.doesNotMatch(result.stdout, /Refactor this webhook|Extract customer ids|Rewrite this README/);
+    assert.doesNotMatch(result.stdout, promptLeakPattern);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -412,7 +431,7 @@ test('release command fails stale classifier evidence from freshness flag', asyn
     assert.equal(report.kind, 'proofroute-release-proof-pack-v1');
     assert.equal(report.status, 'fail');
     assert.equal(report.launch.evidence.checks.find((check) => check.id === 'evidence_freshness').pass, false);
-    assert.doesNotMatch(result.stdout, /Refactor this webhook|Extract customer ids|Rewrite this README/);
+    assert.doesNotMatch(result.stdout, promptLeakPattern);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

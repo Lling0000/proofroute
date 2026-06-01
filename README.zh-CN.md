@@ -31,7 +31,7 @@ node ./bin/proofroute.js route --trace --prompt "Refactor this webhook, explain 
 
 ## 证据包
 
-维护者最重要的第一条命令是 core release proof pack。它不需要 API key，不调用外部 provider，也不会宣称 CUDA、TensorRT 或多 GPU 加速；它只证明仓库门面、零网络路由价值、代理 smoke 路径、prompt-free 隐私边界、SVG 收据、git provenance 和 launch copy 都可以在普通笔记本上复现。
+维护者最重要的第一条命令是 core release proof pack。它不需要 API key，不调用外部 provider，也不会宣称 CUDA、TensorRT 或多 GPU 加速；它只证明仓库门面、零网络路由价值、代理 smoke 路径、代理 matrix 路径、prompt-free 隐私边界、SVG 收据、git provenance 和 launch copy 都可以在普通笔记本上复现。
 
 ```sh
 node ./bin/proofroute.js release --core --out proofroute-release-pack
@@ -43,7 +43,7 @@ node ./bin/proofroute.js release --core --out proofroute-release-pack
 node ./bin/proofroute.js release --core --require-artifact-evidence --artifact-evidence classifier-linear-evidence.json --max-evidence-age-hours 24 --out proofroute-release-pack
 ```
 
-任何硬件加速宣称在进入公开文案之前，都必须先通过严格证据。`node ./bin/proofroute.js doctor --strict-hardware` 会检查 classifier 是否是已 warm 的 HTTP sidecar，是否至少有两个 device、两个 lane，并且 device profiles 是否来自 nvidia-smi。`node ./bin/proofroute.js release --preflight --require-evidence --evidence classifier-evidence.json --max-evidence-age-hours 24` 会解释严格 release blocker，而不会写入 proof pack，也不会默认运行 proxy smoke。这个边界让普通机器可以发布 artifact proof，同时要求 NVIDIA 机器用真实硬件证明自己的 CUDA、TensorRT 和多 GPU 叙事。
+任何硬件加速宣称在进入公开文案之前，都必须先通过严格证据。`node ./bin/proofroute.js doctor --strict-hardware` 会检查 classifier 是否是已 warm 的 HTTP sidecar，是否至少有两个 device、两个 lane，并且 device profiles 是否来自 nvidia-smi。`node ./bin/proofroute.js release --preflight --require-evidence --evidence classifier-evidence.json --max-evidence-age-hours 24` 会解释严格 release blocker，而不会写入 proof pack，也不会默认运行 proxy smoke 和 proxy matrix checks。这个边界让普通机器可以发布 artifact proof，同时要求 NVIDIA 机器用真实硬件证明自己的 CUDA、TensorRT 和多 GPU 叙事。
 
 ## 日常工作流
 
@@ -114,7 +114,7 @@ PROOFROUTE_CLASSIFIER_URL=http://127.0.0.1:8788/classify node ./bin/proofroute.j
 node --test
 ```
 
-维护者侧仓库文案在 [docs/repository-profile.md](docs/repository-profile.md)，同一公共表面可以通过 `node ./bin/proofroute.js profile` 或 `npm run profile` 打印。release 侧入口是 `node ./bin/proofroute.js launch` 或 `npm run launch`，它会把仓库门面、零网络 proof、proxy smoke、隐私审计、share asset 检查和 classifier evidence 状态合并成一张 readiness card。需要把真实公网状态纳入门控时，`node ./bin/proofroute.js launch --check-public` 和 `node ./bin/proofroute.js release --preflight --core --check-public` 会检查公开 GitHub 与 npm 可见性，而不会默认修改远端或写出 proof pack。最后一层发布门禁是 `node ./bin/proofroute.js publish --check-public --check-actions` 或 `npm run publish:preflight`，它会同时检查 package metadata、npm CLI、npm pack dry-run 内容、npm publish dry-run 是否会被自动修正、npm registry 登录态、公开 GitHub 与 npm 可见性，以及最近的 GitHub Actions 证据，并输出机器可读的 `blockers` 和 `nextActions`，让 npm 登录缺失、GitHub 账号可见性限制、匿名 404 和 Actions 禁用变成明确的发布清单。遇到账号层平台限制时，`npm run publish:support-note` 会生成可复制、脱敏、纯文本的支持说明，`npm run publish:support-pack` 会生成可归档的脱敏附件目录，但它们都不会绕过任何 blocker，也不会把外部账号限制伪装成代码发布成功。
+维护者侧仓库文案在 [docs/repository-profile.md](docs/repository-profile.md)，同一公共表面可以通过 `node ./bin/proofroute.js profile` 或 `npm run profile` 打印。release 侧入口是 `node ./bin/proofroute.js launch` 或 `npm run launch`，它会把仓库门面、零网络 proof、proxy smoke、proxy matrix、隐私审计、share asset 检查和 classifier evidence 状态合并成一张 readiness card。需要把真实公网状态纳入门控时，`node ./bin/proofroute.js launch --check-public` 和 `node ./bin/proofroute.js release --preflight --core --check-public` 会检查公开 GitHub 与 npm 可见性，而不会默认修改远端或写出 proof pack。最后一层发布门禁是 `node ./bin/proofroute.js publish --check-public --check-actions` 或 `npm run publish:preflight`，它会同时检查 package metadata、npm CLI、npm pack dry-run 内容、npm publish dry-run 是否会被自动修正、npm registry 登录态、公开 GitHub 与 npm 可见性，以及最近的 GitHub Actions 证据，并输出机器可读的 `blockers` 和 `nextActions`，让 npm 登录缺失、GitHub 账号可见性限制、匿名 404 和 Actions 禁用变成明确的发布清单。遇到账号层平台限制时，`npm run publish:support-note` 会生成可复制、脱敏、纯文本的支持说明，`npm run publish:support-pack` 会生成可归档的脱敏附件目录，但它们都不会绕过任何 blocker，也不会把外部账号限制伪装成代码发布成功。
 
 ProofRoute 想成为开源基础设施里的一个高传播心跳。它最强的 demo 不是幻灯片，也不是落地页，而是一张终端截图：真实 prompt 在毫秒级被路由，本地模型在该赢的时候赢，高质量模型在值得时赢，精确节省金额和工程决策出现在同一个画面里。
 

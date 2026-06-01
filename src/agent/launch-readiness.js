@@ -64,7 +64,9 @@ export async function launchReadinessReport({ controller, runtime, telemetryPath
   });
   checks.push(proofCheck(proof));
   const smokeReport = smoke ? await runSmokeTest({ throughProxy: true }) : undefined;
+  const smokeMatrixReport = smoke ? await runSmokeTest({ throughProxy: true, matrix: true }) : undefined;
   checks.push(smoke ? smokeCheck(smokeReport) : skippedCheck('proxy_smoke', 'proxy smoke', 'Proxy smoke was skipped by request.'));
+  checks.push(smoke ? smokeMatrixCheck(smokeMatrixReport) : skippedCheck('proxy_matrix', 'proxy matrix', 'Proxy matrix smoke was skipped by request.'));
   const privacy = await privacyReport(telemetryPath);
   checks.push(privacyCheck(privacy));
   const assets = await assetReport(cwd, defaultAssets);
@@ -113,6 +115,24 @@ export async function launchReadinessReport({ controller, runtime, telemetryPath
       routerOverheadPct: Number(smokeReport.response.headers?.routerOverheadPct ?? 0),
       usageSource: smokeReport.response.headers?.usageSource,
       browserProofHeaders: smokeReport.cors?.exposeHeaders?.includes('x-proofroute-model') ?? false
+    } : undefined,
+    smokeMatrix: smokeMatrixReport ? {
+      status: smokeMatrixReport.status,
+      mode: smokeMatrixReport.mode,
+      count: smokeMatrixReport.aggregate.count,
+      passed: smokeMatrixReport.aggregate.passed,
+      modelSwaps: smokeMatrixReport.aggregate.modelSwaps,
+      p95RouterMs: smokeMatrixReport.aggregate.p95RouterMs,
+      averageSpeedup: smokeMatrixReport.aggregate.averageSpeedup,
+      savingsUsd: smokeMatrixReport.aggregate.savingsUsd,
+      proofs: smokeMatrixReport.aggregate.proofs,
+      intents: smokeMatrixReport.aggregate.intents,
+      models: smokeMatrixReport.aggregate.models,
+      promptFreeLedger: smokeMatrixReport.ledger.promptFree,
+      privacyStatus: smokeMatrixReport.ledger.privacy.status,
+      forbiddenMatchCount: smokeMatrixReport.ledger.privacy.forbiddenMatchCount,
+      parseErrorCount: smokeMatrixReport.ledger.privacy.parseErrorCount,
+      browserProofHeaders: smokeMatrixReport.cors?.exposeHeaders?.includes('x-proofroute-model') ?? false
     } : undefined,
     privacy: {
       status: privacy.status,
@@ -215,6 +235,20 @@ function smokeCheck(report) {
     label: 'proxy smoke',
     status: passed ? 'pass' : 'fail',
     detail: `status ${report?.response?.status ?? 'unknown'}, model ${headers.requestedModel ?? 'none'}->${headers.model ?? 'none'}, browser proof ${report?.cors?.exposeHeaders?.includes('x-proofroute-model') ? 'readable' : 'missing'}.`
+  };
+}
+
+function smokeMatrixCheck(report) {
+  const passed = report?.status === 'pass';
+  const aggregate = report?.aggregate ?? {};
+  const ledger = report?.ledger ?? {};
+  const privacy = ledger.privacy ?? {};
+  const proofs = Object.keys(aggregate.proofs ?? {}).sort().join(',') || 'none';
+  return {
+    id: 'proxy_matrix',
+    label: 'proxy matrix',
+    status: passed ? 'pass' : 'fail',
+    detail: `${aggregate.passed ?? 0}/${aggregate.count ?? 0} scenarios, model swaps ${aggregate.modelSwaps ?? 0}/${aggregate.count ?? 0}, axes ${proofs}, ledger ${ledger.promptFree ? 'prompt-free' : 'needs audit'}, privacy ${privacy.status ?? 'unknown'} with ${privacy.forbiddenMatchCount ?? 0} forbidden fields and ${privacy.parseErrorCount ?? 0} parse errors.`
   };
 }
 

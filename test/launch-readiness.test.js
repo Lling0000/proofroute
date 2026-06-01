@@ -12,6 +12,9 @@ import { demoCatalog } from '../src/config.js';
 import { RouteController } from '../src/controller/route-controller.js';
 import { renderHelp, renderLaunchReadiness } from '../src/view/terminal.js';
 
+const promptLeakPattern = /Refactor this webhook|Extract customer ids|Rewrite this README|Refactor this TypeScript|Rewrite this launch|Audit this repository|customer ids|stacktrace|Bearer smoke-key/;
+const secretLeakPattern = /secret-token|Refactor this webhook|Extract customer ids|Rewrite this README|Refactor this TypeScript|Rewrite this launch|Audit this repository|customer ids|stacktrace|Bearer smoke-key/;
+
 test('launch readiness summarizes local proof surfaces without prompt text', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'proofroute-launch-readiness-'));
   const telemetryPath = join(dir, 'missing-events.jsonl');
@@ -31,11 +34,13 @@ test('launch readiness summarizes local proof surfaces without prompt text', asy
       'repository_face',
       'zero_network_proof',
       'proxy_smoke',
+      'proxy_matrix',
       'privacy_boundary',
       'share_assets',
       'classifier_evidence'
     ]);
     assert.equal(report.checks.find((check) => check.id === 'zero_network_proof').status, 'pass');
+    assert.equal(report.checks.find((check) => check.id === 'proxy_matrix').status, 'warn');
     assert.equal(report.checks.find((check) => check.id === 'privacy_boundary').status, 'pass');
     assert.equal(report.checks.find((check) => check.id === 'classifier_evidence').status, 'warn');
     assert.equal(report.profile.topicCount, 20);
@@ -49,7 +54,7 @@ test('launch readiness summarizes local proof surfaces without prompt text', asy
     assert.match(output, /LAUNCH READINESS/);
     assert.match(output, /zero-network proof/);
     assert.match(output, /classifier evidence/);
-    assert.doesNotMatch(`${JSON.stringify(report)}\n${output}`, /Refactor this webhook|Extract customer ids|Rewrite this README/);
+    assert.doesNotMatch(`${JSON.stringify(report)}\n${output}`, promptLeakPattern);
     assert.match(renderHelp(), /proofroute launch/);
   } finally {
     await rm(dir, { recursive: true, force: true });
@@ -83,7 +88,7 @@ test('launch readiness rejects invalid share SVG proof assets', async () => {
     assert.equal(invalidAsset.status, 'invalid');
     assert.match(invalidAsset.message, /expected 1200x720/);
     assert.match(invalidAsset.message, /expected title ProofRoute shareable routing proof/);
-    assert.doesNotMatch(JSON.stringify(report), /Refactor this webhook|Extract customer ids|Rewrite this README/);
+    assert.doesNotMatch(JSON.stringify(report), promptLeakPattern);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -103,8 +108,11 @@ test('launch command emits machine-readable readiness proof', async () => {
     assert.equal(report.kind, 'proofroute-launch-readiness-v1');
     assert.equal(report.status, 'warn');
     assert.equal(report.checks.find((check) => check.id === 'proxy_smoke').status, 'warn');
+    assert.equal(report.checks.find((check) => check.id === 'proxy_matrix').status, 'warn');
+    assert.equal(report.smoke, undefined);
+    assert.equal(report.smokeMatrix, undefined);
     assert.equal(report.checks.find((check) => check.id === 'privacy_boundary').status, 'pass');
-    assert.doesNotMatch(result.stdout, /Refactor this webhook|Extract customer ids|Rewrite this README/);
+    assert.doesNotMatch(result.stdout, promptLeakPattern);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -124,6 +132,17 @@ test('launch core uses an empty ledger when no telemetry is explicit', async () 
     assert.equal(result.status, 0, result.stderr);
     const report = JSON.parse(result.stdout);
     assert.equal(report.status, 'pass');
+    assert.equal(report.checks.find((check) => check.id === 'proxy_smoke').status, 'pass');
+    assert.equal(report.checks.find((check) => check.id === 'proxy_matrix').status, 'pass');
+    assert.equal(report.smokeMatrix.status, 'pass');
+    assert.equal(report.smokeMatrix.count, 4);
+    assert.equal(report.smokeMatrix.passed, 4);
+    assert.equal(report.smokeMatrix.modelSwaps, 4);
+    assert.equal(report.smokeMatrix.promptFreeLedger, true);
+    assert.equal(report.smokeMatrix.privacyStatus, 'pass');
+    assert.equal(report.smokeMatrix.forbiddenMatchCount, 0);
+    assert.equal(report.smokeMatrix.parseErrorCount, 0);
+    assert.deepEqual(Object.keys(report.smokeMatrix.proofs).sort(), ['context', 'cost', 'intent']);
     assert.equal(report.privacy.status, 'pass');
     assert.equal(report.privacy.events, 0);
     assert.match(report.privacy.path, /events\.empty\.jsonl$/);
@@ -152,7 +171,7 @@ test('launch command artifact evidence mode makes no hardware claim', async () =
     assert.equal(report.artifactEvidence.claim, 'local_artifact');
     assert.equal(report.checks.find((check) => check.id === 'classifier_evidence').status, 'pass');
     assert.equal(report.checks.find((check) => check.id === 'classifier_artifact_evidence').status, 'pass');
-    assert.doesNotMatch(result.stdout, /Refactor this webhook|Extract customer ids|Rewrite this README/);
+    assert.doesNotMatch(result.stdout, promptLeakPattern);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -183,7 +202,7 @@ test('launch readiness can include the live GitHub repository face gate', async 
     assert.equal(report.checks.find((check) => check.id === 'github_repository_face').status, 'pass');
     const output = renderLaunchReadiness(report);
     assert.match(output, /github face/);
-    assert.doesNotMatch(`${JSON.stringify(report)}\n${output}`, /secret-token|Refactor this webhook|Extract customer ids|Rewrite this README/);
+    assert.doesNotMatch(`${JSON.stringify(report)}\n${output}`, secretLeakPattern);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -242,7 +261,7 @@ test('launch readiness fails public face gate on anonymous GitHub or npm 404', a
     assert.equal(report.checks.find((check) => check.id === 'public_repository_face').status, 'fail');
     const output = renderLaunchReadiness(report);
     assert.match(output, /public face/);
-    assert.doesNotMatch(`${JSON.stringify(report)}\n${output}`, /Refactor this webhook|Extract customer ids|Rewrite this README/);
+    assert.doesNotMatch(`${JSON.stringify(report)}\n${output}`, promptLeakPattern);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

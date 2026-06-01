@@ -31,7 +31,7 @@ node ./bin/proofroute.js route --trace --prompt "Refactor this webhook, explain 
 
 ## Proof Packs
 
-The strongest maintainer first run is the core release proof pack. It needs no API key, calls no external provider, and makes no CUDA, TensorRT, or multi-GPU claim. It proves the repository face, zero-network router value, proxy smoke path, prompt-free privacy boundary, SVG receipt, git provenance, and launch copy that any contributor can reproduce on an ordinary laptop.
+The strongest maintainer first run is the core release proof pack. It needs no API key, calls no external provider, and makes no CUDA, TensorRT, or multi-GPU claim. It proves the repository face, zero-network router value, proxy smoke path, proxy matrix path, prompt-free privacy boundary, SVG receipt, git provenance, and launch copy that any contributor can reproduce on an ordinary laptop.
 
 ```sh
 node ./bin/proofroute.js release --core --out proofroute-release-pack
@@ -43,7 +43,7 @@ When a maintainer wants stronger ordinary-laptop evidence, `npm run classifier:a
 node ./bin/proofroute.js release --core --require-artifact-evidence --artifact-evidence classifier-linear-evidence.json --max-evidence-age-hours 24 --out proofroute-release-pack
 ```
 
-Any public hardware acceleration claim has to pass stricter evidence. `node ./bin/proofroute.js doctor --strict-hardware` checks that the classifier is a warmed HTTP sidecar with at least two devices, at least two lanes, and nvidia-smi sourced profiles. `node ./bin/proofroute.js release --preflight --require-evidence --evidence classifier-evidence.json --max-evidence-age-hours 24` explains strict release blockers without writing a proof pack or running proxy smoke unless `--smoke` is explicitly added.
+Any public hardware acceleration claim has to pass stricter evidence. `node ./bin/proofroute.js doctor --strict-hardware` checks that the classifier is a warmed HTTP sidecar with at least two devices, at least two lanes, and nvidia-smi sourced profiles. `node ./bin/proofroute.js release --preflight --require-evidence --evidence classifier-evidence.json --max-evidence-age-hours 24` explains strict release blockers without writing a proof pack or running proxy smoke and proxy matrix checks unless `--smoke` is explicitly added.
 
 ## Daily Workflow
 
