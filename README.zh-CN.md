@@ -67,7 +67,7 @@ node ./bin/proofroute.js proxy --port 8787 --config examples/router.json
 
 ## 路由证明
 
-单个 prompt 的可解释路径从 `route` 开始。普通路由会展示意图、策略、选中模型、备选模型、预估延迟、预估成本和相对最贵可行 baseline 的节省；trace 模式会进一步展示策略权重、质量、上下文、本地偏置、requested-model、成本、延迟等贡献，以及因为上下文、可执行性、预算或延迟上限被过滤掉的模型。
+单个 prompt 的可解释路径从 `route` 开始。普通路由会展示意图、策略、选中模型、相对 runner-up 的 decision receipt，以及围绕概率、成本匹配、速度匹配和上下文使用量的候选模型 tradeoff 条，同时给出预估延迟、预估成本和相对最贵可行 baseline 的节省。trace 模式会先保留这张收据，再进一步展示策略权重、质量、上下文、本地偏置、requested-model、成本、延迟等贡献，以及因为上下文、可执行性、预算或延迟上限被过滤掉的模型。
 
 ```sh
 node ./bin/proofroute.js route --trace --prompt "Refactor this webhook, explain the bug, and write a regression test."

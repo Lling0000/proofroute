@@ -36,9 +36,15 @@ test('route controller returns a complete economic decision', () => {
   assert.equal(typeof decision.ranked[0].components.quality, 'number');
   assert.equal(typeof decision.ranked[0].components.cost, 'number');
   assert.equal(typeof decision.ranked[0].components.latency, 'number');
+  assert.equal(typeof decision.ranked[0].contextWindow, 'number');
   const output = renderDecision(decision);
   assert.match(output, /balanced/);
   assert.match(output, /policy/);
+  assert.match(output, /decision receipt/);
+  assert.match(output, /cost fit/);
+  assert.match(output, /speed fit/);
+  assert.match(output, /context/);
+  assert.doesNotMatch(output, /NaN|Infinity/);
 });
 
 test('route trace renders scoring contributions for the winning model', () => {
@@ -46,9 +52,14 @@ test('route trace renders scoring contributions for the winning model', () => {
   const decision = controller.route({ prompt: 'Write a focused SQL migration test and explain the production bug.' });
   const output = renderRouteTrace(decision);
   assert.match(output, /ROUTING TRACE/);
+  assert.match(output, /decision receipt/);
+  assert.match(output, /cost fit/);
+  assert.match(output, /speed fit/);
+  assert.match(output, /context/);
   assert.match(output, /quality/);
   assert.match(output, /latency/);
   assert.match(output, /balanced/);
+  assert.doesNotMatch(output, /NaN|Infinity/);
 });
 
 test('route controller records models rejected by context window gates', () => {

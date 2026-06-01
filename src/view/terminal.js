@@ -381,10 +381,15 @@ export function renderRouteTrace(decision) {
   });
   const chosen = decision.ranked[0];
   const components = chosen.components ?? {};
+  const tradeoffs = renderCandidateTradeoffs(decision);
   const output = [
     title('routing trace'),
     `${BOLD}${decision.model.id}${RESET} wins for ${CYAN}${decision.intent.name}${RESET} under ${CYAN}${decision.policy ?? 'balanced'}${RESET} policy because quality ${signed(components.quality)}, context ${signed(components.context)}, local ${signed(components.local)}, requested ${signed(components.requested)}, cost ${signed(components.cost)}, and latency ${signed(components.latency)} settle at ${pct(decision.confidence)} probability.`,
     `${DIM}${decision.inputTokens} input tokens, ${decision.outputTokens} planned output tokens, ${money(decision.economics.savingsUsd)} estimated savings, ${decision.performance.speedup.toFixed(2)}x speedup, cache ${decision.cache?.hit ? 'hit' : 'miss'}.${RESET}`,
+    '',
+    routeReceipt(decision),
+    '',
+    ...tradeoffs,
     '',
     `${pad('model', 27)} probability logit   quality cost    latency context local requested`,
     ...rows,
@@ -399,6 +404,70 @@ export function renderRouteTrace(decision) {
     `${DIM}Positive terms push a model up; negative terms push it down before stable Softmax turns scores into probabilities.${RESET}`
   );
   return output.join('\n');
+}
+
+function renderCandidateTradeoffs(decision, limit = 5) {
+  const candidates = decision.ranked.slice(0, limit);
+  const costs = candidates.map((candidate) => finite(candidate.estimatedCostUsd)).filter(Number.isFinite);
+  const latencies = candidates.map((candidate) => finite(candidate.estimatedLatencyMs)).filter(Number.isFinite);
+  const minCost = costs.length ? Math.min(...costs) : 0;
+  const maxCost = costs.length ? Math.max(...costs) : 0;
+  const minLatency = latencies.length ? Math.min(...latencies) : 0;
+  const maxLatency = latencies.length ? Math.max(...latencies) : 0;
+  const requiredTokens = finite(decision.inputTokens) + finite(decision.outputTokens);
+  const rows = candidates.map((candidate, index) => {
+    const marker = index === 0 ? `${GREEN}winner ${RESET}` : `${DIM}option ${RESET}`;
+    const costFit = inverseRange(candidate.estimatedCostUsd, minCost, maxCost);
+    const latencyFit = inverseRange(candidate.estimatedLatencyMs, minLatency, maxLatency);
+    return `${marker}${pad(candidate.model, 20)} ${bar(candidate.probability, 14)} ${pct(candidate.probability)} ${bar(costFit, 10)} ${pad(money(candidate.estimatedCostUsd), 10)} ${bar(latencyFit, 10)} ${pad(ms(candidate.estimatedLatencyMs), 11)} ${contextUse(candidate, requiredTokens)}`;
+  });
+  return [
+    `${pad('candidate', 27)} probability     cost fit   cost       speed fit  latency    context use`,
+    ...rows
+  ];
+}
+
+function routeReceipt(decision) {
+  const chosen = decision.ranked[0];
+  const runnerUp = decision.ranked.find((candidate) => candidate.model !== chosen.model);
+  if (!runnerUp) {
+    return `${pad('decision receipt', 18)} ${chosen.model} is the only viable route at ${pct(chosen.probability)} probability with ${money(chosen.estimatedCostUsd)} cost, ${ms(chosen.estimatedLatencyMs)} latency, and ${contextUse(chosen, finite(decision.inputTokens) + finite(decision.outputTokens))}.`;
+  }
+  const qualityDelta = finite(chosen.components?.quality) - finite(runnerUp.components?.quality);
+  const probabilityDelta = finite(chosen.probability) - finite(runnerUp.probability);
+  return `${pad('decision receipt', 18)} ${chosen.model} over ${runnerUp.model}: probability edge ${signedPct(probabilityDelta)}, quality term ${signed(qualityDelta)}, ${moneyDelta(chosen.estimatedCostUsd, runnerUp.estimatedCostUsd)}, ${latencyDelta(chosen.estimatedLatencyMs, runnerUp.estimatedLatencyMs)}, ${contextUse(chosen, finite(decision.inputTokens) + finite(decision.outputTokens))}.`;
+}
+
+function moneyDelta(left, right) {
+  const delta = finite(left) - finite(right);
+  if (Math.abs(delta) < 1e-12) return 'cost equal';
+  return delta < 0 ? `cost ${money(Math.abs(delta))} less` : `cost ${money(delta)} more`;
+}
+
+function latencyDelta(left, right) {
+  const delta = finite(left) - finite(right);
+  if (Math.abs(delta) < 1e-9) return 'latency equal';
+  return delta < 0 ? `latency ${ms(Math.abs(delta))} faster` : `latency ${ms(delta)} slower`;
+}
+
+function contextUse(candidate, requiredTokens) {
+  const window = finite(candidate.contextWindow);
+  const required = finite(requiredTokens);
+  if (!Number.isFinite(window) || window <= 0) return 'context use unknown';
+  return `context ${compactTokens(required)}/${compactTokens(window)}`;
+}
+
+function inverseRange(value, min, max) {
+  const number = finite(value);
+  const bottom = finite(min);
+  const top = finite(max);
+  if (!Number.isFinite(number) || !Number.isFinite(bottom) || !Number.isFinite(top) || top <= bottom) return 1;
+  return Math.max(0, Math.min(1, 1 - (number - bottom) / (top - bottom)));
+}
+
+function finite(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
 }
 
 export function renderLaunchDemo(report) {
@@ -653,17 +722,15 @@ export function renderSmoke(report) {
 }
 
 export function renderDecision(decision) {
-  const rows = decision.ranked.slice(0, 5).map((candidate, index) => {
-    const marker = index === 0 ? `${GREEN}selected${RESET}` : `${DIM}option${RESET}`;
-    return `${marker} ${pad(candidate.model, 20)} ${bar(candidate.probability, 24)} ${pct(candidate.probability)} ${money(candidate.estimatedCostUsd)} ${ms(candidate.estimatedLatencyMs)}`;
-  });
+  const tradeoffs = renderCandidateTradeoffs(decision);
   return [
     title('route decision'),
     `${BOLD}${decision.model.id}${RESET} via ${decision.model.provider} for ${CYAN}${decision.intent.name}${RESET} under ${CYAN}${decision.policy ?? 'balanced'}${RESET} policy at ${pct(decision.confidence)} confidence`,
     `${DIM}${decision.inputTokens} input tokens, ${decision.outputTokens} planned output tokens, fallback ${decision.fallback.model}, cache ${decision.cache?.hit ? 'hit' : 'miss'}${RESET}`,
     '',
-    `${pad('model', 28)} probability                 cost       latency`,
-    ...rows,
+    routeReceipt(decision),
+    '',
+    ...tradeoffs,
     '',
     `${GREEN}${money(decision.economics.savingsUsd)} saved${RESET} against the priciest viable model, with ${YELLOW}${decision.performance.speedup.toFixed(2)}x${RESET} estimated speedup.`
   ].join('\n');
@@ -1199,6 +1266,11 @@ function shareAccuracy(summary) {
 function signed(value = 0) {
   const number = Number.isFinite(value) ? value : 0;
   return `${number >= 0 ? '+' : ''}${number.toFixed(2)}`;
+}
+
+function signedPct(value = 0) {
+  const number = Number.isFinite(value) ? value : 0;
+  return `${number >= 0 ? '+' : ''}${pct(number)}`;
 }
 
 function compactCounts(counts) {

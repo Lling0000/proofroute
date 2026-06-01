@@ -274,6 +274,7 @@ function stripInternal(candidate) {
   return {
     model: candidate.model.id,
     provider: candidate.model.provider,
+    contextWindow: candidate.model.contextWindow,
     probability: candidate.probability,
     logit: candidate.logit,
     quality: candidate.quality,

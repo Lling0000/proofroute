@@ -67,7 +67,7 @@ node ./bin/proofroute.js proxy --port 8787 --config examples/router.json
 
 ## Routing Proof
 
-The fastest way to understand one prompt is `route`. It prints detected intent, resolved policy, selected model, viable alternatives, Softmax probabilities, estimated latency, estimated cost, and savings against the most expensive viable baseline. Trace mode adds the weighted quality, context, local, requested-model, cost, and latency contributions, plus the models filtered out by context, executability, budget, or latency ceilings.
+The fastest way to understand one prompt is `route`. It prints detected intent, resolved policy, selected model, a decision receipt against the runner-up, candidate tradeoff bars for probability, cost fit, speed fit, and context use, estimated latency, estimated cost, and savings against the most expensive viable baseline. Trace mode keeps that receipt first, then adds the weighted quality, context, local, requested-model, cost, and latency contributions, plus the models filtered out by context, executability, budget, or latency ceilings.
 
 ```sh
 node ./bin/proofroute.js route --trace --prompt "Refactor this webhook, explain the bug, and write a regression test."
