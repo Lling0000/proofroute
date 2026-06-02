@@ -2,9 +2,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-[![Proof](https://img.shields.io/badge/route%20split-zero--network-22c55e)](#快速开始) [![GitHub](https://img.shields.io/badge/github-Lling0000%2Fproofroute-181717?logo=github)](https://github.com/Lling0000/proofroute) [![License](https://img.shields.io/badge/license-MIT-2ea44f)](LICENSE) [![Node](https://img.shields.io/badge/node-%3E%3D20-339933?logo=nodedotjs)](package.json) [![Dependencies](https://img.shields.io/badge/runtime%20dependencies-zero-0ea5e9)](package.json) [![Proxy](https://img.shields.io/badge/OpenAI-compatible%20proxy-111827)](#openai-兼容代理) [![Architecture](https://img.shields.io/badge/architecture-Agent--View--Controller-7c3aed)](docs/architecture.md)
-
-发布状态：在 `node ./bin/proofroute.js profile --check-public` 证明 public face、并且 `node ./bin/proofroute.js publish --check-public --check-actions` 证明最终 install-copy gate 之前，以本地 checkout 的直接 Node 命令为准。
+[![Proof](https://img.shields.io/badge/route%20split-zero--network-22c55e)](#快速开始) [![License](https://img.shields.io/badge/license-MIT-2ea44f)](LICENSE) [![Dependencies](https://img.shields.io/badge/runtime%20dependencies-zero-0ea5e9)](package.json) [![Proxy](https://img.shields.io/badge/OpenAI-compatible%20proxy-111827)](#openai-兼容代理)
 
 ProofRoute 是为 Vibe Coding 准备的零运行时依赖、CLI-first、OpenAI 兼容大模型路由器和透明代理。它在开发工具真正调用模型之前，本地识别 prompt 意图，估算上下文和输出预算，然后把请求路由给成本更低、速度足够快、质量匹配当前任务的本地或云端模型，并在终端给出速度提升、资金节省、隐私边界和模型选择的可复核证据。
 
@@ -52,7 +50,7 @@ node ./bin/proofroute.js release --core --out proofroute-release-pack
 node ./bin/proofroute.js release --core --require-artifact-evidence --artifact-evidence classifier-linear-evidence.json --max-evidence-age-hours 24 --out proofroute-release-pack
 ```
 
-任何硬件加速宣称在进入公开文案之前，都必须先通过严格证据。`node ./bin/proofroute.js doctor --strict-hardware` 会检查 classifier 是否是已 warm 的 HTTP sidecar，是否至少有两个 device、两个 lane，并且 device profiles 是否来自 nvidia-smi。`node ./bin/proofroute.js release --preflight --require-evidence --evidence classifier-evidence.json --max-evidence-age-hours 24` 会解释严格 release blocker，而不会写入 proof pack，也不会默认运行 proxy smoke 和 proxy matrix checks。这个边界让普通机器可以发布 artifact proof，同时要求 NVIDIA 机器用真实硬件证明自己的 CUDA、TensorRT 和多 GPU 叙事。
+任何硬件加速宣称在进入公开文案之前，都必须先通过严格证据。`node ./bin/proofroute.js doctor --strict-hardware` 会检查 classifier 是否是已 warm 的 HTTP sidecar，是否至少有两个 device、两个 lane，并且 device profiles 是否来自 nvidia-smi。`node ./bin/proofroute.js release --preflight --check-public --require-evidence --evidence classifier-evidence.json --max-evidence-age-hours 24` 会解释严格 release blocker，包括公网门面和干净 git provenance blocker，而不会写入 proof pack，也不会默认运行 proxy smoke 和 proxy matrix checks。这个边界让普通机器可以发布 artifact proof，同时要求 NVIDIA 机器用真实硬件证明自己的 CUDA、TensorRT 和多 GPU 叙事。
 
 ## 日常工作流
 
@@ -64,17 +62,17 @@ ProofRoute 的第一轮传播路径围绕终端 proof 展开。`node ./bin/proof
 
 ## OpenAI 兼容代理
 
-day-one 集成刻意紧凑。`node ./bin/proofroute.js connect --port 8787` 会打印 OpenAI 兼容 Base URL 和验证命令，`eval "$(node ./bin/proofroute.js connect --shell sh)"` 会把同样的环境变量注入当前 shell。如果第一个可执行模型已经在 LM Studio、vLLM 或其他本地 OpenAI 兼容网关后面，`node ./bin/proofroute.js connect --local-openai http://127.0.0.1:1234/v1 --local-openai-model qwen3` 会同时输出客户端需要的 OpenAI 变量和代理侧的 `PROOFROUTE_LOCAL_OPENAI_*` 变量，让第一条路由请求不依赖 `router.json`。
+day-one 集成刻意紧凑。`node ./bin/proofroute.js connect --port 8787` 会打印 OpenAI 兼容 Base URL 和验证命令，`eval "$(node ./bin/proofroute.js connect --shell sh)"` 会把客户端变量注入当前工具 shell。这里的 `OPENAI_API_KEY=proofroute-local` 只是给必须带客户端 key 的 SDK 或 CLI 连接本地 ProofRoute 代理用，不是上游 OpenAI provider 的真实 key。如果第一个可执行模型已经在 LM Studio、vLLM 或其他本地 OpenAI 兼容网关后面，`node ./bin/proofroute.js connect --local-openai http://127.0.0.1:1234/v1 --local-openai-model local-qwen-coder` 会同时输出客户端需要的 OpenAI 变量和代理侧的 `PROOFROUTE_LOCAL_OPENAI_*` 变量，让第一条路由请求不依赖 `router.json`。这里的模型名应该填写本地网关实际暴露的 id，`local-qwen-coder` 只是仓库示例中的占位名称。
 
 ```sh
 node ./bin/proofroute.js connect --port 8787
 eval "$(node ./bin/proofroute.js connect --shell sh)"
 ```
 
-启动透明代理后，现有 OpenAI 兼容客户端可以把 base URL 指向 `http://127.0.0.1:8787/v1`。这里的透明代理指的是 OpenAI-compatible Base URL 代理，而不是网络层 `CONNECT` 代理。ProofRoute 支持 `/v1/chat/completions`、`/v1/completions`、`/v1/responses`、`/v1/models` 和 `/ready`，并通过浏览器可读 response headers 暴露最终模型、请求模型、模型替换状态、策略、意图、runner-up、上下文窗口、上下文占用、预估路由成本、baseline 成本、节省比例、速度提升、预估延迟、baseline 延迟、决策延迟、router overhead、缓存状态、classifier backend、fallback、实际 token 和实际节省。
+启动透明代理后，现有 OpenAI 兼容客户端可以把 base URL 指向 `http://127.0.0.1:8787/v1`。这里的透明代理指的是 OpenAI-compatible Base URL 代理，而不是网络层 `CONNECT` 代理。如果只接本地 OpenAI 兼容服务，优先使用 `examples/local-openai-router.json` 或 `PROOFROUTE_LOCAL_OPENAI_*` 环境变量路径，这条路径不需要上游云端 key。如果使用 `examples/router.json` 这个混合目录，ProofRoute 会期望本地 Ollama 在 `127.0.0.1:11434`，云端 OpenAI 路线还需要真实的上游 `OPENAI_API_KEY`，不能使用 `connect` 打印出来的客户端占位 key。ProofRoute 支持 `/v1/chat/completions`、`/v1/completions`、`/v1/responses`、`/v1/models` 和 `/ready`，并通过浏览器可读 response headers 暴露最终模型、请求模型、模型替换状态、策略、意图、候选第二名、上下文窗口、上下文占用、预估路由成本、baseline 成本、节省比例、速度提升、预估延迟、baseline 延迟、决策延迟、router overhead、缓存状态、classifier backend、fallback、实际 token 和实际节省。
 
 ```sh
-node ./bin/proofroute.js proxy --port 8787 --config examples/router.json
+node ./bin/proofroute.js proxy --port 8787 --config examples/local-openai-router.json
 ```
 
 ## 路由证明
@@ -127,7 +125,7 @@ PROOFROUTE_CLASSIFIER_URL=http://127.0.0.1:8788/classify node ./bin/proofroute.j
 node --test
 ```
 
-维护者侧仓库文案在 [docs/repository-profile.md](docs/repository-profile.md)，同一公共表面可以通过 `node ./bin/proofroute.js profile` 或 `npm run profile` 打印，`npm run release:npm:dry-run` 则用于在不发布的情况下预览 npm tarball。release 侧入口是 `node ./bin/proofroute.js launch` 或 `npm run launch`，它会把仓库门面、零网络 proof、proxy smoke、proxy matrix、隐私审计、share asset 检查和 classifier evidence 状态合并成一张 readiness card。需要把真实公网状态纳入门控时，`node ./bin/proofroute.js launch --check-public` 和 `node ./bin/proofroute.js release --preflight --core --check-public` 会检查公开 GitHub 与 npm 可见性，而不会默认修改远端或写出 proof pack。最后一层发布门禁是 `node ./bin/proofroute.js publish --check-public --check-actions` 或 `npm run publish:preflight`，它会同时检查 package metadata、可解析的 git HEAD、干净的 source tree、npm CLI、npm pack dry-run 内容、npm publish dry-run 是否会被自动修正、npm registry 登录态、公开 GitHub 与 npm 可见性，以及当前本地 HEAD 对应的 GitHub Actions 证据，并输出机器可读的 `blockers`、`nextActions`、`npm.evidence` 和 `summary.localEvidence`。这让干净的 checkout、干净的 npm CLI、干净的 tarball 表面和干净的 publish dry-run 能在 npm 登录、公开 npm 可见性、GitHub 账号可见性或账号层 Actions 仍需外部处理时继续保持可见。遇到账号层平台限制时，`npm run publish:support-note` 会生成可复制、脱敏、纯文本的支持说明，`npm run publish:support-pack` 会生成包含紧凑 `status.json` 的可归档脱敏附件目录，但它们都不会绕过任何 blocker，也不会把外部账号限制伪装成代码发布成功。
+维护者侧仓库文案在 [docs/repository-profile.md](docs/repository-profile.md)，同一公共表面可以通过 `node ./bin/proofroute.js profile` 或 `npm run profile` 打印，`npm run release:npm:dry-run` 则用于在不发布的情况下预览 npm tarball。发布状态必须保持诚实：在 `node ./bin/proofroute.js profile --check-public` 证明公网门面、并且 `node ./bin/proofroute.js publish --check-public --check-actions` 证明最终安装文案门禁之前，以本地 checkout 的直接 Node 命令为准。release 侧入口是 `node ./bin/proofroute.js launch` 或 `npm run launch`，它会把仓库门面、零网络 proof、proxy smoke、proxy matrix、隐私审计、share asset 检查和 classifier evidence 状态合并成一张 readiness card。需要把真实公网状态纳入门控时，`node ./bin/proofroute.js launch --check-public` 和 `node ./bin/proofroute.js release --preflight --core --check-public` 会检查公开 GitHub 与 npm 可见性，而不会默认修改远端或写出 proof pack。维护者可以先运行 `node ./bin/proofroute.js publish --local-only` 或 `npm run publish:local`，只证明本地 source tree、package surface、npm CLI、npm pack dry-run 和 npm publish dry-run，不触碰 npm 登录、GitHub、匿名公网可见性或 Actions。这个本地预检通过是有价值的发布证据，但不是最终公网安装文案门禁。最后一层发布门禁仍然是 `node ./bin/proofroute.js publish --check-public --check-actions` 或 `npm run publish:preflight`，它会同时检查 package metadata、可解析的 git HEAD、干净的 source tree、npm CLI、npm pack dry-run 内容、npm publish dry-run 是否会被自动修正、npm registry 登录态、公开 GitHub 与 npm 可见性，以及当前本地 HEAD 对应的 GitHub Actions 证据，并输出机器可读的 `blockers`、`nextActions`、`npm.evidence` 和 `summary.localEvidence`。这让干净的 checkout、干净的 npm CLI、干净的 tarball 表面和干净的 publish dry-run 能在 npm 登录、公开 npm 可见性、GitHub 账号可见性或账号层 Actions 仍需外部处理时继续保持可见。遇到账号层平台限制时，`npm run publish:support-note` 会生成可复制、脱敏、纯文本的支持说明，`npm run publish:support-pack` 会生成包含紧凑 `status.json` 的可归档脱敏附件目录，但它们都不会绕过任何 blocker，也不会把外部账号限制伪装成代码发布成功。
 
 ProofRoute 想成为开源基础设施里的一个高传播心跳。它最强的 demo 不是幻灯片，也不是落地页，而是一张终端截图：真实 prompt 在毫秒级被路由，本地模型在该赢的时候赢，高质量模型在值得时赢，精确节省金额和工程决策出现在同一个画面里。
 

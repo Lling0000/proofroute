@@ -39,7 +39,7 @@ export async function releaseProofPack({ controller, runtime, outDir = 'proofrou
     cwd
   });
   const packLaunch = releasePackSafeLaunch(launch);
-  const gitReport = git === false ? skippedGitProvenance() : await gitProvenanceReport({ cwd, gitRunner });
+  const gitReport = enforceStrictGitProvenance(git === false ? skippedGitProvenance() : await gitProvenanceReport({ cwd, gitRunner }), { strict: requireEvidence });
   await mkdir(absoluteOut, { recursive: true });
   await mkdir(join(absoluteOut, 'assets'), { recursive: true });
   const files = [];
@@ -163,7 +163,7 @@ export async function releasePreflightReport({ controller, runtime, outDir = 'pr
     publicFetch,
     cwd
   });
-  const gitReport = git === false ? skippedGitProvenance() : await gitProvenanceReport({ cwd, gitRunner });
+  const gitReport = enforceStrictGitProvenance(git === false ? skippedGitProvenance() : await gitProvenanceReport({ cwd, gitRunner }), { strict: requireEvidence });
   const evidenceFiles = [];
   if (core) {
     evidenceFiles.push({
@@ -377,6 +377,16 @@ async function gitProvenanceReport({ cwd, gitRunner }) {
       message: compactMessage(error.message)
     };
   }
+}
+
+function enforceStrictGitProvenance(report, { strict = false } = {}) {
+  if (!strict || report.status === 'pass') return report;
+  return {
+    ...report,
+    status: 'fail',
+    strictRequired: true,
+    message: [report.message, 'Strict hardware release requires clean git provenance before public accelerator claims.'].filter(Boolean).join(' ')
+  };
 }
 
 async function gitOutput(args, { cwd, gitRunner }) {

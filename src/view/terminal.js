@@ -17,6 +17,7 @@ export function renderHelp() {
     '  node ./bin/proofroute.js route --trace --prompt "why this model?"',
     '  node ./bin/proofroute.js route --trace --markdown --prompt "why this model?"',
     '  node ./bin/proofroute.js connect --port 8787',
+    '  node ./bin/proofroute.js smoke --proxy',
     '',
     `${BOLD}Usage${RESET}`,
     '  proofroute route --prompt "fix this flaky test"',
@@ -51,7 +52,7 @@ export function renderHelp() {
     '  proofroute launch --require-evidence --evidence classifier-evidence.json --max-evidence-age-hours 24',
     '  proofroute release --core --out proofroute-release-pack',
     '  proofroute release --core --require-artifact-evidence --artifact-evidence classifier-linear-evidence.json --max-evidence-age-hours 24 --out proofroute-release-pack',
-    '  proofroute release --preflight --require-evidence --evidence classifier-evidence.json --max-evidence-age-hours 24',
+    '  proofroute release --preflight --check-public --require-evidence --evidence classifier-evidence.json --max-evidence-age-hours 24',
     '  proofroute release --preflight --smoke --require-evidence --evidence classifier-evidence.json --max-evidence-age-hours 24',
     '  proofroute release --out proofroute-release-pack --check-github',
     '  proofroute release --preflight --core --check-public',
@@ -60,6 +61,7 @@ export function renderHelp() {
     '  proofroute publish --check-public --check-actions --probe-actions-dispatch',
     '  proofroute publish --check-public --check-actions --probe-actions-dispatch --support-note',
     '  proofroute publish --check-public --check-actions --probe-actions-dispatch --support-pack proofroute-publish-support-pack',
+    '  proofroute publish --local-only',
     '  proofroute publish --npm /path/to/npm-cli.js --check-public',
     '  proofroute smoke',
     '  proofroute smoke --proxy',
@@ -109,7 +111,7 @@ export function renderHelp() {
     '  profile Print repository About copy, GitHub topics, README badges, npm metadata, launch pitch, proof commands, and optional GitHub drift checks.',
     '  launch  Run the local launch readiness proof across repository face, demo proof, proxy smoke, proxy matrix, privacy, assets, and classifier evidence.',
     '  release Write a prompt-free release proof pack with readiness JSON, repository metadata, git provenance, launch copy, and SVG proof assets.',
-    '  publish Check npm, package, public face, GitHub Actions evidence, plain support notes, and redacted support packs while --json keeps JSON priority.',
+    '  publish Check npm, package, public face, GitHub Actions evidence, local-only preflight, plain support notes, and redacted support packs while --json keeps JSON priority.',
     '  smoke   Run a local fake-provider execution loop through the Agent runtime, the transparent proxy, or a proxy routing matrix.',
     '  bench   Run a zero-network local benchmark that makes routing value visible immediately.',
     '  calibrate Run a local prompt suite and show intent accuracy, savings, and p95 routing latency.',
@@ -148,6 +150,7 @@ export function renderRepositoryProfile(report) {
     `${pad('single trace', 16)} ${report.commands.singleTrace}`,
     `${pad('public face', 16)} ${report.commands.publicFace}`,
     `${pad('npm dry run', 16)} ${report.commands.npmDryRun}`,
+    `${pad('local publish', 16)} ${report.commands.localPublishPreflight}`,
     `${pad('publish gate', 16)} ${report.commands.publishPreflight}`,
     `${pad('support note', 16)} ${report.commands.publishSupportNote}`,
     `${pad('support pack', 16)} ${report.commands.publishSupportPack}`,
@@ -274,22 +277,31 @@ export function renderReleasePreflight(report) {
 
 export function renderPublishReadiness(report) {
   const mark = report.status === 'pass' ? `${GREEN}PASS${RESET}` : `${MAGENTA}FAIL${RESET}`;
+  const localOnly = report.localOnly === true || report.mode === 'local_only';
+  const fullGateRequested = report.fullGateRequested === true;
   const rows = (report.checks ?? []).map((check) => {
     const state = check.pass ? `${GREEN}pass${RESET}` : check.skipped ? `${YELLOW}skip${RESET}` : `${MAGENTA}fail${RESET}`;
     return `${state} ${pad(check.label, 24)} ${DIM}${compactText(check.detail, 112)}${RESET}`;
   });
-  const publicFace = report.public ? `${report.public.status} owner ${report.public.github?.owner?.status ?? 'unknown'} github ${report.public.github?.status ?? 'unknown'} npm ${report.public.npm?.status ?? 'unknown'}` : 'not checked';
-  const github = report.github ? `${report.github.summary?.pass ? 'pass' : 'fail'} ${report.github.repository?.visibility ?? 'unknown'} private ${report.github.repository?.isPrivate === false ? 'no' : report.github.repository?.isPrivate === true ? 'yes' : 'unknown'}` : 'not checked';
-  const account = report.account ? `${report.account.summary?.pass ? 'pass' : 'fail'}${report.account.blocker ? ` ${report.account.blocker}` : ''}` : 'not checked';
-  const actions = report.actions ? `${report.actions.summary?.pass ? 'pass' : 'fail'} enabled ${report.actions.permissions?.enabled === true ? 'yes' : 'unknown'} runs ${(report.actions.runs ?? []).length}${report.actions.dispatch ? ` dispatch ${report.actions.dispatch.ok ? 'ok' : 'fail'}` : ''}` : 'not checked';
+  const skipped = localOnly ? 'skipped by --local-only' : 'not checked';
+  const publicFace = report.public ? `${report.public.status} owner ${report.public.github?.owner?.status ?? 'unknown'} github ${report.public.github?.status ?? 'unknown'} npm ${report.public.npm?.status ?? 'unknown'}` : skipped;
+  const github = report.github ? `${report.github.summary?.pass ? 'pass' : 'fail'} ${report.github.repository?.visibility ?? 'unknown'} private ${report.github.repository?.isPrivate === false ? 'no' : report.github.repository?.isPrivate === true ? 'yes' : 'unknown'}` : skipped;
+  const account = report.account ? `${report.account.summary?.pass ? 'pass' : 'fail'}${report.account.blocker ? ` ${report.account.blocker}` : ''}` : skipped;
+  const actions = report.actions ? `${report.actions.summary?.pass ? 'pass' : 'fail'} enabled ${report.actions.permissions?.enabled === true ? 'yes' : 'unknown'} runs ${(report.actions.runs ?? []).length}${report.actions.dispatch ? ` dispatch ${report.actions.dispatch.ok ? 'ok' : 'fail'}` : ''}` : skipped;
   const npmEvidence = renderNpmPublishEvidence(report.npm?.evidence);
   const localEvidence = renderPublishLocalEvidence(report.summary);
   const supportPack = report.supportPack ? publishSupportPackDisplay(report.supportPack) : undefined;
   const supportRows = publishSupportRows(report, supportPack);
   const blockers = (report.blockers ?? []).map((blocker) => `${MAGENTA}${blocker.id}${RESET} ${DIM}${compactText(blocker.nextAction, 112)}${RESET}`);
+  const description = localOnly
+    ? `${report.package?.name}@${report.package?.version} local-only publish preflight for source tree, package surface, and npm publish dry-run; npm auth, public face, and GitHub Actions are skipped.`
+    : fullGateRequested
+      ? `${report.package?.name}@${report.package?.version} publish preflight for source tree, package surface, npm registry auth, public visibility, and GitHub Actions evidence.`
+      : `${report.package?.name}@${report.package?.version} publish preflight for source tree, package surface, npm registry auth, and any requested external checks; final install-copy gate is not claimed.`;
   return [
     title('publish readiness'),
-    `${BOLD}${mark}${RESET} ${DIM}${report.package?.name}@${report.package?.version} publish preflight for source tree, package surface, npm registry auth, public visibility, and GitHub Actions evidence.${RESET}`,
+    `${BOLD}${mark}${RESET} ${DIM}${description}${RESET}`,
+    `${pad('mode', 16)} ${localOnly ? 'local-only, full publish gate not claimed' : fullGateRequested ? 'full publish gate' : 'partial publish preflight, full gate not claimed'}`,
     `${pad('npm command', 16)} ${report.npm?.command ?? 'npm'}`,
     `${pad('npm evidence', 16)} ${npmEvidence}`,
     `${pad('local evidence', 16)} ${localEvidence}`,
@@ -306,6 +318,7 @@ export function renderPublishReadiness(report) {
 }
 
 export function renderPublishSupportNote(report) {
+  const localOnly = report.localOnly === true || report.mode === 'local_only';
   const blockers = report.blockers ?? [];
   const nextActions = report.nextActions ?? [];
   const supportMessages = blockers.map((blocker) => redactSupportText(blocker.supportMessage)).filter(Boolean);
@@ -320,11 +333,12 @@ export function renderPublishSupportNote(report) {
     'ProofRoute publish support note',
     `Generated at ${redactSupportText(report.generatedAt ?? 'unknown time')}.`,
     `Package ${redactSupportText(report.package?.name ?? 'unknown')}@${redactSupportText(report.package?.version ?? 'unknown')} for repository ${redactSupportText(report.package?.repository ?? 'unknown repository')}.`,
-    `Publish preflight status is ${redactSupportText(report.status ?? 'unknown')}.`,
-    `Authenticated GitHub repository state is ${report.github?.summary?.pass ? 'public' : 'not proven public'}.`,
-    `Anonymous public face state is ${redactSupportText(report.public?.status ?? 'not checked')}.`,
-    `GitHub account visibility blocker is ${redactSupportText(report.account?.blocker ?? 'not detected')}.`,
-    `GitHub Actions state is ${report.actions?.summary?.pass ? 'passing' : report.actions ? 'not ready' : 'not checked'}.`,
+    `Publish preflight status is ${redactSupportText(report.status ?? 'unknown')} in ${localOnly ? 'local-only mode' : 'full mode'}.`,
+    `Full publish ready is ${report.fullPublishReady === true && !localOnly ? 'true' : 'false'}.`,
+    `Authenticated GitHub repository state is ${localOnly ? 'skipped by --local-only' : report.github?.summary?.pass ? 'public' : 'not proven public'}.`,
+    `Anonymous public face state is ${localOnly ? 'skipped by --local-only' : redactSupportText(report.public?.status ?? 'not checked')}.`,
+    `GitHub account visibility blocker is ${localOnly ? 'skipped by --local-only' : redactSupportText(report.account?.blocker ?? 'not detected')}.`,
+    `GitHub Actions state is ${localOnly ? 'skipped by --local-only' : report.actions?.summary?.pass ? 'passing' : report.actions ? 'not ready' : 'not checked'}.`,
     `Npm evidence is ${npmEvidence}.`,
     `Local publish evidence is ${localEvidence}.`,
     '',
@@ -356,6 +370,10 @@ function publishSupportPackDisplay(pack) {
 function publishSupportRows(report, supportPack) {
   if (supportPack) return [`${pad('support pack', 16)} ${supportPack}`];
   if ((report.blockers ?? []).length === 0) return [];
+  if (report.localOnly === true || report.mode === 'local_only') {
+    const count = report.blockers.length === 1 ? '1 local blocker' : `${report.blockers.length} local blockers`;
+    return [`${pad('support pack', 16)} ${compactText(`not needed for local-only; fix ${count} before rerunning proofroute publish --local-only`, 132)}`];
+  }
   const count = report.blockers.length === 1 ? '1 blocker' : `${report.blockers.length} blockers`;
   const scope = report.summary?.remainingBlockerScope ?? 'unknown';
   return [
@@ -450,7 +468,7 @@ export function renderLaunchReadiness(report) {
   return [
     title('launch readiness'),
     `${BOLD}${mark}${RESET} ${DIM}local zero-network launch proof for repository face, routing value, proxy compatibility, privacy boundary, share assets, and classifier evidence.${RESET}`,
-    `${GREEN}${money(proof.savingsUsd ?? 0)} saved${RESET}, ${MAGENTA}${Number(proof.averageSpeedup ?? 0).toFixed(2)}x${RESET} speedup, ${YELLOW}${ms(Number(proof.p95RouterMs ?? 0))}${RESET} p95 router, ${YELLOW}${percent(proof.p95RouterOverheadPct ?? 0)}${RESET} overhead, ${CYAN}${report.profile?.topicCount ?? 0}${RESET} GitHub topics.`,
+    `${GREEN}${money(proof.savingsUsd ?? 0)} saved${RESET}, ${MAGENTA}${Number(proof.averageSpeedup ?? 0).toFixed(2)}x${RESET} speedup, ${YELLOW}${ms(Number(proof.p95RouterMs ?? 0))}${RESET} p95 router, ${YELLOW}${percent(proof.p95RouterOverheadPct ?? 0)}${RESET} overhead, ${CYAN}${report.profile?.topicCount ?? 0}${RESET} ${report.github || report.public ? 'GitHub/public topics checked below' : 'local profile topics'}.`,
     `${pad('proxy smoke', 16)} ${smoke.status ?? 'unknown'} ${smoke.requestedModel ?? 'none'}->${smoke.model ?? 'none'} swap ${smoke.modelSwap ?? 'false'} browser ${smoke.browserProofHeaders ? 'readable' : 'unknown'}`,
     `${pad('proxy matrix', 16)} ${smokeMatrix.status ?? 'skipped'} ${smokeMatrix.passed ?? 0}/${smokeMatrix.count ?? 0} scenarios swaps ${smokeMatrix.modelSwaps ?? 0}/${smokeMatrix.count ?? 0} privacy ${smokeMatrix.privacyStatus ?? 'unknown'} ledger ${smokeMatrix.promptFreeLedger ? 'prompt-free' : 'unknown'} browser ${smokeMatrix.browserProofHeaders ? 'readable' : 'unknown'}`,
     ...(github ? [`${pad('github face', 16)} ${github.status ?? 'unknown'} ${github.repository ?? 'unresolved'}`] : []),
@@ -921,6 +939,7 @@ export function renderDecision(decision) {
     title('route decision'),
     `${BOLD}${decision.model.id}${RESET} via ${decision.model.provider} for ${CYAN}${decision.intent.name}${RESET} under ${CYAN}${decision.policy ?? 'balanced'}${RESET} policy at ${pct(decision.confidence)} confidence`,
     `${DIM}${decision.inputTokens} input tokens, ${decision.outputTokens} planned output tokens, fallback ${decision.fallback.model}, cache ${decision.cache?.hit ? 'hit' : 'miss'}${RESET}`,
+    `${pad('proof boundary', 16)} provider calls 0 before execution, prompt text not printed, model names are routing targets`,
     '',
     routeReceipt(decision),
     '',

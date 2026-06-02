@@ -20,7 +20,7 @@ test('repository profile keeps public metadata executable and shareable', async 
   assert.equal(report.npm.binaries.find((entry) => entry.name === 'proofroute-classifier').role, 'reference classifier sidecar');
   assert.ok(report.npm.keywords.includes('vibe-coding'));
   assert.match(report.npm.description, /coding agents/);
-  assert.equal(report.social.badges.length, 7);
+  assert.equal(report.social.badges.length, 4);
   assert.equal(report.social.badges[0].id, 'proof');
   assert.match(report.social.badges[0].image, /route%20split-zero--network/);
   assert.match(report.social.shortPitch, /zero-dependency OpenAI-compatible proxy/);
@@ -29,6 +29,7 @@ test('repository profile keeps public metadata executable and shareable', async 
   assert.equal(report.commands.singleTrace, 'node ./bin/proofroute.js route --trace --markdown --prompt "why this model?"');
   assert.equal(report.commands.publicFace, 'node ./bin/proofroute.js profile --check-public');
   assert.equal(report.commands.npmDryRun, 'npm run release:npm:dry-run');
+  assert.equal(report.commands.localPublishPreflight, 'node ./bin/proofroute.js publish --local-only');
   assert.equal(report.commands.publishPreflight, 'node ./bin/proofroute.js publish --check-public --check-actions');
   assert.equal(report.commands.publishSupportNote, 'node ./bin/proofroute.js publish --check-public --check-actions --probe-actions-dispatch --support-note');
   assert.equal(report.commands.publishSupportPack, 'node ./bin/proofroute.js publish --check-public --check-actions --probe-actions-dispatch --support-pack proofroute-publish-support-pack');
@@ -36,7 +37,7 @@ test('repository profile keeps public metadata executable and shareable', async 
   assert.equal(report.commands.publicLaunch, 'node ./bin/proofroute.js launch --check-public');
   assert.equal(report.commands.coreReleasePack, 'node ./bin/proofroute.js release --core --out proofroute-release-pack');
   assert.equal(report.commands.artifactReleasePack, 'node ./bin/proofroute.js release --core --require-artifact-evidence --artifact-evidence classifier-linear-evidence.json --max-evidence-age-hours 24 --out proofroute-release-pack');
-  assert.equal(report.commands.releaseStrictPreflight, 'node ./bin/proofroute.js release --preflight --require-evidence --evidence classifier-evidence.json --max-evidence-age-hours 24');
+  assert.equal(report.commands.releaseStrictPreflight, 'node ./bin/proofroute.js release --preflight --check-public --require-evidence --evidence classifier-evidence.json --max-evidence-age-hours 24');
   assert.equal(report.commands.publicReleasePreflight, 'node ./bin/proofroute.js release --preflight --core --check-public');
   assert.equal(report.commands.artifactEvidenceGate, 'npm run classifier:artifact:evidence && npm run classifier:artifact:verify');
   assert.equal(report.commands.linearEvidenceGate, 'npm run classifier:linear:sidecar, then npm run classifier:linear:evidence && npm run classifier:linear:verify');
@@ -53,6 +54,7 @@ test('repository profile keeps public metadata executable and shareable', async 
   assert.match(output, /proofroute-classifier/);
   assert.match(output, /short pitch/);
   assert.match(output, /public face/);
+  assert.match(output, /local publish/);
   assert.match(output, /publish gate/);
   assert.match(output, /support note/);
   assert.match(output, /support pack/);
@@ -106,6 +108,7 @@ test('profile command emits machine-readable repository face metadata', () => {
   assert.equal(report.commands.publicFace, 'node ./bin/proofroute.js profile --check-public');
   assert.equal(report.commands.singleTrace, 'node ./bin/proofroute.js route --trace --markdown --prompt "why this model?"');
   assert.equal(report.commands.npmDryRun, 'npm run release:npm:dry-run');
+  assert.equal(report.commands.localPublishPreflight, 'node ./bin/proofroute.js publish --local-only');
   assert.equal(report.commands.publishPreflight, 'node ./bin/proofroute.js publish --check-public --check-actions');
   assert.equal(report.commands.publishSupportNote, 'node ./bin/proofroute.js publish --check-public --check-actions --probe-actions-dispatch --support-note');
   assert.equal(report.commands.publishSupportPack, 'node ./bin/proofroute.js publish --check-public --check-actions --probe-actions-dispatch --support-pack proofroute-publish-support-pack');
@@ -113,7 +116,7 @@ test('profile command emits machine-readable repository face metadata', () => {
   assert.equal(report.commands.publicLaunch, 'node ./bin/proofroute.js launch --check-public');
   assert.equal(report.commands.coreReleasePack, 'node ./bin/proofroute.js release --core --out proofroute-release-pack');
   assert.equal(report.commands.artifactReleasePack, 'node ./bin/proofroute.js release --core --require-artifact-evidence --artifact-evidence classifier-linear-evidence.json --max-evidence-age-hours 24 --out proofroute-release-pack');
-  assert.equal(report.commands.releaseStrictPreflight, 'node ./bin/proofroute.js release --preflight --require-evidence --evidence classifier-evidence.json --max-evidence-age-hours 24');
+  assert.equal(report.commands.releaseStrictPreflight, 'node ./bin/proofroute.js release --preflight --check-public --require-evidence --evidence classifier-evidence.json --max-evidence-age-hours 24');
   assert.equal(report.commands.publicReleasePreflight, 'node ./bin/proofroute.js release --preflight --core --check-public');
   assert.equal(report.commands.artifactEvidenceGate, 'npm run classifier:artifact:evidence && npm run classifier:artifact:verify');
   assert.equal(report.commands.linearEvidenceGate, 'npm run classifier:linear:sidecar, then npm run classifier:linear:evidence && npm run classifier:linear:verify');
@@ -123,6 +126,17 @@ test('profile command emits machine-readable repository face metadata', () => {
   assert.equal(report.commands.launchReadiness, 'node ./bin/proofroute.js launch');
   assert.equal(report.commands.launchEvidenceGate, 'node ./bin/proofroute.js launch --require-evidence --evidence classifier-evidence.json --max-evidence-age-hours 24');
   assert.equal(report.commands.shareSvg, 'node ./bin/proofroute.js share --svg --out docs/proofroute-terminal.svg');
+});
+
+test('CLI accepts equals-style flags for copy-pasteable first proof commands', () => {
+  const result = spawnSync(process.execPath, ['./bin/proofroute.js', 'route', '--prompt=fix this flaky test', '--json'], {
+    cwd: new URL('..', import.meta.url),
+    encoding: 'utf8'
+  });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.intent.name, 'code');
+  assert.ok(report.model.id);
 });
 
 test('public repository face check reports GitHub and npm visibility without credentials', async () => {
@@ -252,8 +266,8 @@ test('README badge report rejects missing first-screen badges', async () => {
     await writeFile(readme, '# ProofRoute\n\nProof without badges.\n');
     const report = await readmeBadgeReport({ readmePath: readme, checkImages: false });
     assert.equal(report.status, 'fail');
-    assert.equal(report.expected.length, 7);
-    assert.equal(report.missing.length, 7);
+    assert.equal(report.expected.length, 4);
+    assert.equal(report.missing.length, 4);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

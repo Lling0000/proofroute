@@ -34,22 +34,10 @@ const readmeBadges = Object.freeze([
     target: '#quick-start'
   }),
   Object.freeze({
-    id: 'github',
-    alt: 'GitHub',
-    image: 'https://img.shields.io/badge/github-Lling0000%2Fproofroute-181717?logo=github',
-    target: 'https://github.com/Lling0000/proofroute'
-  }),
-  Object.freeze({
     id: 'license',
     alt: 'License',
     image: 'https://img.shields.io/badge/license-MIT-2ea44f',
     target: 'LICENSE'
-  }),
-  Object.freeze({
-    id: 'node',
-    alt: 'Node',
-    image: 'https://img.shields.io/badge/node-%3E%3D20-339933?logo=nodedotjs',
-    target: 'package.json'
   }),
   Object.freeze({
     id: 'dependencies',
@@ -62,12 +50,6 @@ const readmeBadges = Object.freeze([
     alt: 'Proxy',
     image: 'https://img.shields.io/badge/OpenAI-compatible%20proxy-111827',
     target: '#openai-proxy'
-  }),
-  Object.freeze({
-    id: 'architecture',
-    alt: 'Architecture',
-    image: 'https://img.shields.io/badge/architecture-Agent--View--Controller-7c3aed',
-    target: 'docs/architecture.md'
   })
 ]);
 
@@ -90,6 +72,7 @@ const commands = {
   singleTrace: 'node ./bin/proofroute.js route --trace --markdown --prompt "why this model?"',
   publicFace: 'node ./bin/proofroute.js profile --check-public',
   npmDryRun: 'npm run release:npm:dry-run',
+  localPublishPreflight: 'node ./bin/proofroute.js publish --local-only',
   publishPreflight: 'node ./bin/proofroute.js publish --check-public --check-actions',
   publishSupportNote: 'node ./bin/proofroute.js publish --check-public --check-actions --probe-actions-dispatch --support-note',
   publishSupportPack: 'node ./bin/proofroute.js publish --check-public --check-actions --probe-actions-dispatch --support-pack proofroute-publish-support-pack',
@@ -99,7 +82,7 @@ const commands = {
   launchEvidenceGate: 'node ./bin/proofroute.js launch --require-evidence --evidence classifier-evidence.json --max-evidence-age-hours 24',
   coreReleasePack: 'node ./bin/proofroute.js release --core --out proofroute-release-pack',
   artifactReleasePack: 'node ./bin/proofroute.js release --core --require-artifact-evidence --artifact-evidence classifier-linear-evidence.json --max-evidence-age-hours 24 --out proofroute-release-pack',
-  releaseStrictPreflight: 'node ./bin/proofroute.js release --preflight --require-evidence --evidence classifier-evidence.json --max-evidence-age-hours 24',
+  releaseStrictPreflight: 'node ./bin/proofroute.js release --preflight --check-public --require-evidence --evidence classifier-evidence.json --max-evidence-age-hours 24',
   publicReleasePreflight: 'node ./bin/proofroute.js release --preflight --core --check-public',
   shareSvg: 'node ./bin/proofroute.js share --svg --out docs/proofroute-terminal.svg',
   privacyProof: 'node ./bin/proofroute.js privacy --file .proofroute/events.jsonl',

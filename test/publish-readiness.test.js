@@ -22,6 +22,8 @@ test('publish readiness passes when package, npm, auth, and Actions evidence are
   });
   assert.equal(report.kind, 'proofroute-publish-readiness-v1');
   assert.equal(report.status, 'pass');
+  assert.equal(report.fullGateRequested, false);
+  assert.equal(report.fullPublishReady, false);
   assert.equal(report.npm.pack.pass, true);
   assert.equal(report.npm.publishDryRun.pass, true);
   assert.equal(report.npm.auth.pass, true);
@@ -48,6 +50,60 @@ test('publish readiness passes when package, npm, auth, and Actions evidence are
   assert.match(output, /GitHub Actions/);
   assert.doesNotMatch(output, /launch evidence/);
   assert.doesNotMatch(output, /--support-pack proofroute-publish-support-pack/);
+});
+
+test('publish local-only mode proves local package evidence without auth, GitHub, or public fetches', async () => {
+  const calls = [];
+  const baseRunner = fakePublishRunner({ auth: false, actionsRuns: [] });
+  const report = await publishReadinessReport({
+    localOnly: true,
+    runner: async (command, args, options) => {
+      calls.push(`${command} ${args.join(' ')}`);
+      return baseRunner(command, args, options);
+    },
+    fetchImpl: async () => {
+      throw new Error('local-only must not fetch public metadata');
+    }
+  });
+  assert.equal(report.kind, 'proofroute-publish-readiness-v1');
+  assert.equal(report.mode, 'local_only');
+  assert.equal(report.localOnly, true);
+  assert.equal(report.status, 'pass');
+  assert.equal(report.fullPublishReady, false);
+  assert.equal(report.summary.localEvidence, 'pass');
+  assert.equal(report.summary.fullPublishReady, false);
+  assert.equal(report.summary.remainingBlockerScope, 'full_publish_checks_skipped');
+  assert.deepEqual(report.summary.skippedExternalChecks, ['npm_auth', 'github_authenticated', 'github_account_visibility', 'public_face', 'github_actions']);
+  assert.deepEqual(report.blockers, []);
+  assert.deepEqual(report.nextActions, []);
+  assert.equal(report.npm.auth.skipped, true);
+  assert.equal(report.npm.evidence.auth, 'skipped');
+  assert.deepEqual(report.checks.map((check) => check.id), ['package_metadata', 'source_tree', 'npm_cli', 'npm_pack', 'npm_publish_dry_run']);
+  assert.ok(!calls.some((call) => /npm whoami|^gh /.test(call)), calls.join('\n'));
+  const output = renderPublishReadiness(report);
+  assert.match(output, /local-only/);
+  assert.match(output, /full publish gate not claimed/);
+  assert.match(output, /skipped by --local-only/);
+  assert.doesNotMatch(output, /support pack/);
+  const supportNote = renderPublishSupportNote(report);
+  assert.match(supportNote, /local-only mode/);
+  assert.match(supportNote, /Full publish ready is false/);
+  assert.match(supportNote, /GitHub Actions state is skipped by --local-only/);
+});
+
+test('publish local-only mode rejects external gate flags instead of silently downgrading them', async () => {
+  await assert.rejects(
+    publishReadinessReport({ localOnly: true, checkPublic: true, runner: fakePublishRunner({ auth: true }) }),
+    /--local-only cannot be combined/
+  );
+  await assert.rejects(
+    publishReadinessReport({ localOnly: true, checkActions: true, runner: fakePublishRunner({ auth: true }) }),
+    /--local-only cannot be combined/
+  );
+  await assert.rejects(
+    publishReadinessReport({ localOnly: true, probeActionsDispatch: true, runner: fakePublishRunner({ auth: true }) }),
+    /--local-only cannot be combined/
+  );
 });
 
 test('publish readiness fails when the source tree has uncommitted changes', async () => {
@@ -418,6 +474,42 @@ if (args[0] === '--version') {
     });
     assert.equal(missingDir.status, 1);
     assert.match(missingDir.stderr, /Pass --support-pack as a directory/);
+    const localOnly = spawnSync(process.execPath, [proofrouteBin, 'publish', '--npm', npmPath, '--local-only', '--json'], {
+      cwd: cleanCwd,
+      encoding: 'utf8'
+    });
+    assert.equal(localOnly.status, 0, localOnly.stderr || localOnly.stdout);
+    const localOnlyReport = JSON.parse(localOnly.stdout);
+    assert.equal(localOnlyReport.kind, 'proofroute-publish-readiness-v1');
+    assert.equal(localOnlyReport.mode, 'local_only');
+    assert.equal(localOnlyReport.status, 'pass');
+    assert.equal(localOnlyReport.fullPublishReady, false);
+    assert.equal(localOnlyReport.npm.evidence.auth, 'skipped');
+    assert.deepEqual(localOnlyReport.blockers, []);
+    const localOnlyJsonPriority = spawnSync(process.execPath, [proofrouteBin, 'publish', '--npm', npmPath, '--local-only', '--support-note', '--json'], {
+      cwd: cleanCwd,
+      encoding: 'utf8'
+    });
+    assert.equal(localOnlyJsonPriority.status, 0, localOnlyJsonPriority.stderr || localOnlyJsonPriority.stdout);
+    assert.doesNotMatch(localOnlyJsonPriority.stdout, /ProofRoute publish support note/);
+    assert.equal(JSON.parse(localOnlyJsonPriority.stdout).mode, 'local_only');
+    const localPackDir = join(dir, 'local-only-support-pack');
+    const localPack = spawnSync(process.execPath, [proofrouteBin, 'publish', '--npm', npmPath, '--local-only', '--support-pack', localPackDir, '--json'], {
+      cwd: cleanCwd,
+      encoding: 'utf8'
+    });
+    assert.equal(localPack.status, 0, localPack.stderr || localPack.stdout);
+    const localPackReport = JSON.parse(localPack.stdout);
+    assert.equal(localPackReport.status, 'pass');
+    assert.equal(localPackReport.supportPack.status, 'pass');
+    assert.equal(localPackReport.supportPack.readyToPublish, false);
+    assert.equal(localPackReport.supportPack.statusSummary.readyToPublish, false);
+    assert.equal(localPackReport.supportPack.statusSummary.fullPublishReady, false);
+    assert.equal(localPackReport.supportPack.statusSummary.localGateReady, true);
+    assert.ok(existsSync(join(localPackDir, 'status.json')));
+    const localPackStatus = JSON.parse(await readFile(join(localPackDir, 'status.json'), 'utf8'));
+    assert.equal(localPackStatus.localOnly, true);
+    assert.equal(localPackStatus.readyToPublish, false);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

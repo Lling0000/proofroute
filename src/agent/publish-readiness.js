@@ -33,6 +33,7 @@ export async function publishReadinessReport({
   packagePath = new URL('../../package.json', import.meta.url),
   npmCommand = process.env.PROOFROUTE_NPM_COMMAND ?? 'npm',
   registry = process.env.PROOFROUTE_NPM_REGISTRY ?? 'https://registry.npmjs.org/',
+  localOnly = false,
   checkPublic = false,
   checkActions = false,
   probeActionsDispatch = false,
@@ -42,9 +43,13 @@ export async function publishReadinessReport({
   runner = runCommand,
   fetchImpl = globalThis.fetch
 } = {}) {
+  if (localOnly && (checkPublic || checkActions || probeActionsDispatch)) {
+    throw new Error('--local-only cannot be combined with --check-public, --check-actions, or --probe-actions-dispatch.');
+  }
   const profile = await repositoryProfileReport({ packagePath });
   const pkg = JSON.parse(await readFile(packagePath, 'utf8'));
   const repository = repo ?? profile.github.repository;
+  const mode = localOnly ? 'local_only' : 'full';
   const checks = [];
   const npm = { command: npmCommand, registry };
   const metadata = packageMetadataCheck(pkg);
@@ -60,13 +65,16 @@ export async function publishReadinessReport({
     checks.push(npm.pack);
     npm.publishDryRun = await npmPublishDryRunCheck({ npmCommand, cwd, registry, runner });
     checks.push(npm.publishDryRun);
-    npm.auth = await npmAuthCheck({ npmCommand, cwd, registry, runner });
-    checks.push(npm.auth);
+    npm.auth = localOnly
+      ? skippedCheck('npm_auth', 'npm auth', 'npm auth is skipped by --local-only.')
+      : await npmAuthCheck({ npmCommand, cwd, registry, runner });
+    if (!localOnly) checks.push(npm.auth);
   } else {
     npm.pack = skippedCheck('npm_pack', 'npm pack dry-run', 'npm CLI is unavailable.');
     npm.publishDryRun = skippedCheck('npm_publish_dry_run', 'npm publish dry-run', 'npm CLI is unavailable.');
     npm.auth = skippedCheck('npm_auth', 'npm auth', 'npm CLI is unavailable.');
-    checks.push(npm.pack, npm.publishDryRun, npm.auth);
+    checks.push(npm.pack, npm.publishDryRun);
+    if (!localOnly) checks.push(npm.auth);
   }
   npm.evidence = npmEvidenceSummary(npm);
   let publicFace;
@@ -92,18 +100,25 @@ export async function publishReadinessReport({
   }
   const requiredPass = checks.filter((check) => check.severity !== 'advisory').every((check) => check.pass || check.skipped);
   const skippedRequired = checks.some((check) => check.severity !== 'advisory' && check.skipped);
-  const blockers = publishBlockers({ npm, source, account, publicFace, actions, repository, npmCommand, registry });
+  const blockers = publishBlockers({ npm, source, account, publicFace, actions, repository, npmCommand, registry, localOnly });
   const nextActions = blockers.map((blocker) => ({
     id: `${blocker.id}_next`,
     forBlocker: blocker.id,
     summary: blocker.nextAction,
     command: blocker.command
   }));
-  const summary = publishReadinessSummary({ npm, source, blockers });
+  const status = requiredPass && !skippedRequired ? 'pass' : 'fail';
+  const fullGateRequested = !localOnly && checkPublic && checkActions;
+  const fullPublishReady = status === 'pass' && fullGateRequested;
+  const summary = publishReadinessSummary({ npm, source, blockers, localOnly, fullPublishReady });
   return {
     kind: 'proofroute-publish-readiness-v1',
     generatedAt: new Date().toISOString(),
-    status: requiredPass && !skippedRequired ? 'pass' : 'fail',
+    mode,
+    localOnly,
+    fullGateRequested,
+    fullPublishReady,
+    status,
     summary,
     package: {
       name: pkg.name,
@@ -141,7 +156,7 @@ export async function writePublishSupportPack({ report, supportNote, outDir = 'p
     kind: 'proofroute-publish-support-pack-v1',
     generatedAt,
     status: report.status ?? 'unknown',
-    readyToPublish: report.status === 'pass',
+    readyToPublish: isFullPublishReady(report),
     outDir: displayPath(cwd, absoluteOut),
     package: {
       name: report.package?.name,
@@ -459,7 +474,8 @@ function shortSha(value) {
   return sha ? sha.slice(0, 7) : 'unknown';
 }
 
-function publishBlockers({ npm, source, account, publicFace, actions, repository, npmCommand, registry }) {
+function publishBlockers({ npm, source, account, publicFace, actions, repository, npmCommand, registry, localOnly = false }) {
+  const publishCommand = publishCommandForMode(localOnly);
   const blockers = [];
   if (source?.summary && !source.summary.pass) {
     const headUnavailable = !source.head?.pass;
@@ -477,7 +493,7 @@ function publishBlockers({ npm, source, account, publicFace, actions, repository
         dirtyCount: source.dirtyCount,
         statusCode: source.status?.code
       },
-      nextAction: headUnavailable ? 'Run git rev-parse HEAD, repair the local checkout, then rerun proofroute publish so the package and CI evidence have a stable source commit.' : 'Run git status --short, commit or stash the local changes, then rerun proofroute publish so npm pack and CI evidence describe the same source tree.',
+      nextAction: headUnavailable ? `Run git rev-parse HEAD, repair the local checkout, then rerun ${publishCommand} so the package evidence has a stable source commit.` : `Run git status --short, commit or stash the local changes, then rerun ${publishCommand} so npm pack and publish dry-run describe the same source tree.`,
       command: headUnavailable ? 'git rev-parse HEAD' : 'git status --short',
       scope: 'local',
       localFixable: true,
@@ -494,7 +510,7 @@ function publishBlockers({ npm, source, account, publicFace, actions, repository
         checkId: 'npm_cli',
         code: npm.cli.output?.code
       },
-      nextAction: `Run ${npmCommand} --version, install npm if needed, or rerun with proofroute publish --npm /path/to/npm --check-public --check-actions.`,
+      nextAction: `Run ${npmCommand} --version, install npm if needed, or rerun with ${publishCommand} --npm /path/to/npm.`,
       command: `${npmCommand} --version`,
       scope: 'local',
       localFixable: true,
@@ -510,8 +526,8 @@ function publishBlockers({ npm, source, account, publicFace, actions, repository
       evidence: {
         checkId: 'package_metadata'
       },
-      nextAction: 'Update package.json so the package is configured for public npm access, has both CLI bins, ships both README surfaces, and uses publishConfig access public, then rerun proofroute publish.',
-      command: 'node ./bin/proofroute.js publish --json',
+      nextAction: `Update package.json so the package is configured for public npm access, has both CLI bins, ships both README surfaces, and uses publishConfig access public, then rerun ${publishCommand}.`,
+      command: `node ./bin/proofroute.js publish${localOnly ? ' --local-only' : ' --check-public --check-actions'} --json`,
       scope: 'local',
       localFixable: true,
       supportCategory: 'package_metadata'
@@ -528,7 +544,7 @@ function publishBlockers({ npm, source, account, publicFace, actions, repository
         missing: npm.pack.missing ?? [],
         code: npm.pack.output?.code
       },
-      nextAction: `Run ${npmCommand} pack --json --dry-run and make the required ProofRoute CLI, source, docs, README, license, security, and env template files appear in the package before publishing.`,
+      nextAction: `Run ${npmCommand} pack --json --dry-run and make the required ProofRoute CLI, source, docs, README, license, security, and env template files appear in the package before rerunning ${publishCommand}.`,
       command: `${npmCommand} pack --json --dry-run`,
       scope: 'local',
       localFixable: true,
@@ -545,7 +561,7 @@ function publishBlockers({ npm, source, account, publicFace, actions, repository
         checkId: 'npm_publish_dry_run',
         code: npm.publishDryRun.output?.code
       },
-      nextAction: `Run ${npmCommand} publish --dry-run --access public --registry ${registry}, fix any npm errors or metadata auto-corrections, then rerun proofroute publish.`,
+      nextAction: `Run ${npmCommand} publish --dry-run --access public --registry ${registry}, fix any npm errors or metadata auto-corrections, then rerun ${publishCommand}.`,
       command: `${npmCommand} publish --dry-run --access public --registry ${registry}`,
       scope: 'local',
       localFixable: true,
@@ -641,7 +657,11 @@ function publishBlockers({ npm, source, account, publicFace, actions, repository
   return blockers;
 }
 
-function publishReadinessSummary({ npm, source, blockers }) {
+function publishCommandForMode(localOnly) {
+  return localOnly ? 'proofroute publish --local-only' : 'proofroute publish --check-public --check-actions';
+}
+
+function publishReadinessSummary({ npm, source, blockers, localOnly = false, fullPublishReady = false }) {
   const localChecks = [source?.summary, npm.metadata, npm.cli, npm.pack, npm.publishDryRun].filter(Boolean);
   const localEvidence = localChecks.length === 0
     ? 'not_checked'
@@ -654,13 +674,19 @@ function publishReadinessSummary({ npm, source, blockers }) {
   const localFixableBlockerIds = blockers.filter((blocker) => blocker.localFixable).map((blocker) => blocker.id);
   const operatorBlockerIds = blockers.filter((blocker) => blocker.scope === 'operator_auth').map((blocker) => blocker.id);
   const externalBlockerIds = blockers.filter((blocker) => blocker.scope === 'external_platform').map((blocker) => blocker.id);
+  const skippedExternalChecks = localOnly
+    ? ['npm_auth', 'github_authenticated', 'github_account_visibility', 'public_face', 'github_actions']
+    : [];
   const remainingBlockerScope = blockers.length === 0
-    ? 'none'
+    ? localOnly ? 'full_publish_checks_skipped' : 'none'
     : localEvidence === 'pass' && localFixableBlockerIds.length === 0
       ? 'external_or_operator'
       : 'local_or_mixed';
   return {
+    mode: localOnly ? 'local_only' : 'full',
     localEvidence,
+    fullPublishReady,
+    skippedExternalChecks,
     remainingBlockerScope,
     blockerIds,
     localFixableBlockerIds,
@@ -736,13 +762,20 @@ function publishSupportStatusSummary({ report, generatedAt }) {
   const github = report.github;
   const source = report.source;
   const blockerIds = (report.blockers ?? []).map((blocker) => blocker.id);
+  const fullPublishReady = isFullPublishReady(report);
   return {
     kind: 'proofroute-publish-support-status-v1',
     generatedAt,
+    mode: report.mode ?? (report.localOnly ? 'local_only' : 'full'),
+    localOnly: report.localOnly === true,
+    fullGateRequested: report.fullGateRequested === true,
     status: report.status ?? 'unknown',
-    readyToPublish: report.status === 'pass',
+    readyToPublish: fullPublishReady,
+    fullPublishReady,
+    localGateReady: summary.localEvidence === 'pass',
     localEvidence: summary.localEvidence ?? 'not_summarized',
     remainingBlockerScope: summary.remainingBlockerScope ?? 'unknown',
+    skippedExternalChecks: summary.skippedExternalChecks ?? [],
     blockerIds,
     localFixableBlockerIds: summary.localFixableBlockerIds ?? [],
     operatorBlockerIds: summary.operatorBlockerIds ?? [],
@@ -806,6 +839,10 @@ function publishSupportStatusSummary({ report, generatedAt }) {
   };
 }
 
+function isFullPublishReady(report) {
+  return report?.status === 'pass' && report?.localOnly !== true && report?.fullPublishReady !== false;
+}
+
 function npmEvidenceSummary(npm) {
   const pack = npm.pack?.package;
   const version = npm.cli?.pass ? npmVersionFromOutput(npm.cli.output?.stdout) : undefined;
@@ -847,13 +884,17 @@ function publishSupportNextActionsMarkdown({ report, generatedAt }) {
   const actions = (report.nextActions ?? []).map((action) => redactSupportText(action.summary)).filter(Boolean);
   const status = redactSupportText(report.status ?? 'unknown').toUpperCase();
   const npmEvidence = report.npm?.evidence;
+  const localOnly = report.localOnly === true;
   const evidenceLine = npmEvidence
     ? `Npm evidence is command ${redactSupportText(npmEvidence.command ?? 'unknown')}, version ${redactSupportText(npmEvidence.version ?? 'unknown')}, pack ${redactSupportText(npmEvidence.pack)}, package ${redactSupportText(npmEvidence.package?.filename ?? 'unknown package')} with ${redactSupportText(npmEvidence.package?.entryCount ?? 'unknown')} files, dry-run ${redactSupportText(npmEvidence.publishDryRun)}, auth ${redactSupportText(npmEvidence.auth)}, and ${redactSupportText(npmEvidence.requiredFilesMissing ?? 'unknown')} missing required files across ${redactSupportText(npmEvidence.requiredFilesChecked ?? 'unknown')} checked files.`
     : 'Npm evidence was not attached to this publish report.';
+  const statusLine = localOnly
+    ? `Generated at ${redactSupportText(generatedAt)} for ${redactSupportText(packageName)} and repository ${redactSupportText(repository)}. The local-only publish preflight status is ${status}, so this pack records source, package, and npm dry-run evidence without claiming npm auth, public visibility, or GitHub Actions readiness.`
+    : `Generated at ${redactSupportText(generatedAt)} for ${redactSupportText(packageName)} and repository ${redactSupportText(repository)}. The publish preflight status is ${status}, so this pack records release evidence rather than converting the failed gate into a success.`;
   return [
     '# ProofRoute Publish Support Pack',
     '',
-    `Generated at ${redactSupportText(generatedAt)} for ${redactSupportText(packageName)} and repository ${redactSupportText(repository)}. The publish preflight status is ${status}, so this pack records release evidence rather than converting the failed gate into a success.`,
+    statusLine,
     '',
     evidenceLine,
     '',
@@ -868,10 +909,11 @@ function publishSupportNextActionsMarkdown({ report, generatedAt }) {
 
 function publishSupportRedactionPolicy({ report, generatedAt }) {
   const blockers = (report.blockers ?? []).map((blocker) => redactSupportText(blocker.id)).join(', ') || 'none';
+  const mode = report.localOnly === true ? 'local-only source and package preflight' : 'full publish preflight';
   return [
     'ProofRoute publish support pack redaction policy',
     '',
-    `Generated at ${redactSupportText(generatedAt)} with blocker ids ${blockers}. This pack is designed for account-level GitHub or npm support conversations and release logs, not for replacing the publish gate.`,
+    `Generated at ${redactSupportText(generatedAt)} with blocker ids ${blockers}. This pack was created from the ${mode} and is designed for release logs or platform support conversations, not for replacing the publish gate.`,
     '',
     'The pack redacts ANSI control sequences, terminal control characters, URL userinfo, token-like query parameters, token-shaped environment assignments, Authorization bearer values, OpenAI-style secret keys, GitHub tokens, and local user home paths. It is not expected to contain prompt text, completion text, credentials, private provider endpoints, or raw local npm log paths.',
     ''

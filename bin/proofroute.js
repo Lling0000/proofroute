@@ -177,9 +177,11 @@ try {
     console.log(args.json ? renderJson(report) : preflight ? renderReleasePreflight(report) : renderReleaseProofPack(report));
     if (report.status === 'fail') process.exitCode = 1;
   } else if (command === 'publish') {
+    const localOnly = truthy(args['local-only'] ?? args.localOnly);
     const report = await publishReadinessReport({
       npmCommand: args.npm ?? args['npm-command'] ?? args.npmCommand,
       registry: args.registry,
+      localOnly,
       checkPublic: !truthy(args['no-public'] ?? args.noPublic) && (truthy(args['check-public'] ?? args.checkPublic) || truthy(args.public)),
       checkActions: truthy(args['check-actions'] ?? args.checkActions),
       probeActionsDispatch: truthy(args['probe-actions-dispatch'] ?? args.probeActionsDispatch),
@@ -807,7 +809,13 @@ function parseArgs(argv) {
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
     if (!token.startsWith('--')) continue;
-    const key = token.slice(2);
+    const raw = token.slice(2);
+    const equalsIndex = raw.indexOf('=');
+    if (equalsIndex !== -1) {
+      parsed[raw.slice(0, equalsIndex)] = raw.slice(equalsIndex + 1);
+      continue;
+    }
+    const key = raw;
     const next = argv[index + 1];
     if (!next || next.startsWith('--')) {
       parsed[key] = true;

@@ -355,6 +355,40 @@ test('strict hardware release rejects artifact-only evidence without hardware pr
   }
 });
 
+test('strict hardware release fails dirty git even when hardware evidence is fresh', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'proofroute-release-strict-dirty-'));
+  const outDir = join(dir, 'pack');
+  try {
+    const config = demoCatalog();
+    const controller = new RouteController(config);
+    const runtime = new AgentRuntime(config);
+    const evidencePath = join(dir, 'classifier-evidence.json');
+    await writeFile(evidencePath, `${JSON.stringify(await fixtureEvidence({ generatedAt: '2026-05-31T23:30:00.000Z', hardwareProbe: true }), null, 2)}\n`, 'utf8');
+    const report = await releaseProofPack({
+      controller,
+      runtime,
+      outDir,
+      telemetryPath: join(dir, 'missing-events.jsonl'),
+      evidencePath,
+      requireEvidence: true,
+      maxEvidenceAgeMs: 24 * 60 * 60 * 1000,
+      now: new Date('2026-06-01T00:00:00.000Z'),
+      smoke: false,
+      gitRunner: fakeGitRunner({ status: ' M README.md\n' })
+    });
+    assert.equal(report.status, 'fail');
+    assert.equal(report.git.status, 'fail');
+    assert.equal(report.git.strictRequired, true);
+    assert.equal(report.git.dirty, true);
+    assert.match(report.git.message, /Strict hardware release requires clean git provenance/);
+    assert.equal(report.launch.evidence.status, 'pass');
+    assert.equal(report.launch.evidence.checks.find((check) => check.id === 'hardware_probe').pass, true);
+    assert.ok(report.evidenceFiles.some((file) => file.claim === 'hardware' && file.status === 'pass'));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('release preflight reports strict hardware blockers without writing pack files', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'proofroute-release-preflight-'));
   const outDir = join(dir, 'pack');
@@ -618,9 +652,15 @@ function fakeGitRunner({ status = '' } = {}) {
   return async (args) => outputs.get(args.join('\u0000')) ?? '';
 }
 
-async function fixtureEvidence({ generatedAt = new Date().toISOString() } = {}) {
+async function fixtureEvidence({ generatedAt = new Date().toISOString(), hardwareProbe = false } = {}) {
   const artifactPath = 'examples/linear-intent-model.json';
   const bytes = await readFile(artifactPath);
+  const gates = [
+    { id: 'device_profiles', label: 'device profiles', pass: true, value: 1, target: 1, direction: 'min', unit: 'count' }
+  ];
+  if (hardwareProbe) {
+    gates.push({ id: 'hardware_probe', label: 'hardware probe', pass: true, value: 1, target: 1, direction: 'min', unit: 'count' });
+  }
   return {
     status: 'pass',
     evidence: {
@@ -632,11 +672,9 @@ async function fixtureEvidence({ generatedAt = new Date().toISOString() } = {}) 
       benchmark: {
         deviceProfileCount: 1
       },
-      gates: [
-        { id: 'device_profiles', label: 'device profiles', pass: true, value: 1, target: 1, direction: 'min', unit: 'count' }
-      ],
+      gates,
       deviceProfiles: [
-        { id: '0', name: 'Fixture GPU' }
+        { id: '0', name: 'Fixture GPU', source: hardwareProbe ? 'nvidia-smi' : 'manual' }
       ],
       artifacts: [
         {
