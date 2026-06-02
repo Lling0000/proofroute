@@ -581,6 +581,7 @@ export function renderLaunchDemo(report) {
     `${BOLD}${summary.count} prompts${RESET} routed before any provider call, with p95 decision ${YELLOW}${ms(summary.p95RouterMs)}${RESET}, p95 overhead ${YELLOW}${percent(summary.p95RouterOverheadPct ?? 0)}${RESET}, and total runtime ${CYAN}${ms(report.elapsedMs)}${RESET}.`,
     `${GREEN}${money(summary.savingsUsd)} saved${RESET} against the priciest viable routes, with ${MAGENTA}${summary.averageSpeedup.toFixed(2)}x${RESET} average estimated speedup and ${CYAN}${accuracy}${RESET} labeled intent accuracy.`,
     '',
+    `${pad('provider calls', 16)} ${summary.providerCalls ?? 0} before routing proof`,
     `${pad('money delta', 16)} ${GREEN}${'█'.repeat(costWidth)}${DIM}${'░'.repeat(40 - costWidth)}${RESET} ${pct(costRatio)}`,
     `${pad('speed lift', 16)} ${MAGENTA}${'█'.repeat(speedWidth)}${DIM}${'░'.repeat(40 - speedWidth)}${RESET} ${summary.averageSpeedup.toFixed(2)}x`,
     `${pad('route overhead', 16)} ${bar(overheadRatio, 40)} ${percent(summary.p95RouterOverheadPct ?? 0)}`,
@@ -704,6 +705,9 @@ export function renderProofGate(report) {
     `${pad('speed lift', 16)} ${bar(Math.min(1, report.aggregate.averageSpeedup / 4), 40)} ${report.aggregate.averageSpeedup.toFixed(2)}x`
   ];
   if (accuracy !== undefined) metricRows.push(`${pad('intent hits', 16)} ${bar(accuracy, 40)} ${pct(accuracy)}`);
+  const providerCallRows = report.source === 'ledger' || report.aggregate.providerCalls === undefined
+    ? []
+    : [`${pad('provider calls', 16)} ${report.aggregate.providerCalls} before gate`];
   const rows = report.checks.map((check) => {
     const status = check.pass ? `${GREEN}pass${RESET}` : `${MAGENTA}fail${RESET}`;
     const comparator = check.direction === 'max' ? '<=' : '>=';
@@ -714,6 +718,7 @@ export function renderProofGate(report) {
     `${BOLD}${markColor}${mark}${RESET} ${DIM}${source}.${RESET}`,
     `${GREEN}${money(report.aggregate.savingsUsd)} saved${RESET}, ${MAGENTA}${report.aggregate.averageSpeedup.toFixed(2)}x${RESET} speedup, ${YELLOW}${ms(report.aggregate.p95RouterMs)}${RESET} p95 decision, ${YELLOW}${percent(report.aggregate.p95RouterOverheadPct ?? 0)}${RESET} router overhead, ${CYAN}${report.aggregate.count} requests${RESET}${accuracy === undefined ? '.' : `, ${CYAN}${pct(accuracy)}${RESET} intent accuracy.`}`,
     '',
+    ...providerCallRows,
     ...metricRows,
     '',
     `${pad('check', 21)} observed     gate`,

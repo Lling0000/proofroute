@@ -16,10 +16,13 @@ test('launch demo renders a zero-network proof card', async () => {
   assert.ok(report.aggregate.averageSpeedup > 0);
   assert.ok(report.aggregate.p95RouterOverheadPct >= 0);
   assert.ok(report.aggregate.accuracy >= 0.8);
+  assert.equal(report.aggregate.providerCalls, 0);
   assert.equal(report.aggregate.classifierBackends.builtin, 5);
   assert.ok(report.routes.every((row) => row.model && row.actualIntent));
   const output = renderLaunchDemo(report);
   assert.match(output, /ROUTE PROOF/);
+  assert.match(output, /provider calls/);
+  assert.match(output, /0 before routing proof/);
   assert.match(output, /money delta/);
   assert.match(output, /route overhead/);
   assert.match(output, /intent mix/);
@@ -60,6 +63,7 @@ test('launch demo renders a zero-network proof card', async () => {
     }
   });
   assert.equal(proof.status, 'pass');
+  assert.equal(proof.aggregate.providerCalls, 0);
   assert.equal(proof.checks.length, 5);
   const failedProof = await runtime.prove({
     controller,
@@ -79,6 +83,8 @@ test('launch demo renders a zero-network proof card', async () => {
   const proofOutput = renderProofGate(proof);
   assert.match(proofOutput, /PROOF GATE/);
   assert.match(proofOutput, /PASS/);
+  assert.match(proofOutput, /provider calls/);
+  assert.match(proofOutput, /0 before gate/);
   const ledgerProof = await runtime.prove({
     source: 'ledger',
     path: '.proofroute/events.jsonl',
@@ -98,9 +104,11 @@ test('launch demo renders a zero-network proof card', async () => {
   });
   assert.equal(ledgerProof.status, 'pass');
   assert.equal(ledgerProof.source, 'ledger');
+  assert.equal(ledgerProof.aggregate.providerCalls, undefined);
   assert.equal(ledgerProof.checks.length, 4);
   const ledgerOutput = renderProofGate(ledgerProof);
   assert.match(ledgerOutput, /local telemetry proof/);
+  assert.doesNotMatch(ledgerOutput, /provider calls/);
   assert.doesNotMatch(ledgerOutput, /intent accuracy/);
   assert.match(renderHelp(), /proofroute share/);
   assert.match(renderHelp(), /proofroute share --markdown/);

@@ -276,6 +276,7 @@ export class AgentRuntime {
         baselineCostUsd: totalBaselineCostUsd,
         averageSpeedup: average(routes.map((row) => row.speedup)),
         p95RouterOverheadPct: percentile(routes.map((row) => row.routerOverheadPct), 0.95),
+        providerCalls: 0,
         localRoutes: routes.filter((row) => row.local).length,
         cloudRoutes: routes.filter((row) => !row.local).length,
         intents: countBy(routes.map((row) => row.actualIntent)),
@@ -1207,6 +1208,7 @@ function normalizeProofAggregate(aggregate) {
     actualCostUsd,
     averageSpeedup: proofNumber(aggregate.averageSpeedup),
     accuracy: Number.isFinite(Number(aggregate.accuracy)) ? Number(aggregate.accuracy) : undefined,
+    providerCalls: aggregate.providerCalls === undefined ? undefined : proofNumber(aggregate.providerCalls),
     classifierCircuitOpen: proofNumber(aggregate.classifierCircuitOpen)
   };
 }
