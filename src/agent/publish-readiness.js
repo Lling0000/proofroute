@@ -80,7 +80,7 @@ export async function publishReadinessReport({
       id: 'public_face',
       label: 'public GitHub and npm face',
       pass: publicFace.status === 'pass',
-      detail: `public face ${publicFace.status}, owner ${publicFace.github?.owner?.status ?? 'unknown'}, github ${publicFace.github?.status ?? 'unknown'}, npm ${publicFace.npm?.status ?? 'unknown'}.`
+      detail: publicFaceCheckDetail(publicFace)
     }));
   }
   let actions;
@@ -355,8 +355,9 @@ async function githubActionsCheck({ repo, cwd, runner, probeDispatch = false, wo
     parsedRuns = [];
   }
   const enabled = parsedPermissions?.enabled === true;
-  const hasRuns = parsedRuns.length > 0;
-  const hasPassingRun = parsedRuns.some((run) => run.conclusion === 'success');
+  const workflowRuns = parsedRuns.filter((run) => String(run.workflowName ?? '') === String(workflow));
+  const hasRuns = workflowRuns.length > 0;
+  const hasPassingRun = workflowRuns.some((run) => run.status === 'completed' && run.conclusion === 'success');
   const dispatchOk = dispatch === undefined || dispatch.ok;
   const pass = permissions.ok && runs.ok && enabled && dispatchOk && hasRuns && hasPassingRun;
   const dispatchDetail = dispatch === undefined ? '' : `, dispatch probe ${dispatch.ok ? 'ok' : `failed ${commandMessage(dispatch)}`}`;
@@ -364,13 +365,15 @@ async function githubActionsCheck({ repo, cwd, runner, probeDispatch = false, wo
     id: 'github_actions',
     label: 'GitHub Actions',
     pass,
-    detail: pass ? `Actions are enabled and ${parsedRuns.length} recent runs include a passing CI run${dispatchDetail}.` : `Actions enabled ${enabled}, recent runs ${parsedRuns.length}, passing runs ${hasPassingRun ? 'yes' : 'no'}, permissions command ${permissions.ok ? 'ok' : 'failed'}, run list ${runs.ok ? 'ok' : 'failed'}${dispatchDetail}.`
+    detail: pass ? `Actions are enabled and ${workflowRuns.length}/${parsedRuns.length} recent runs for ${workflow} include a passing completed run${dispatchDetail}.` : `Actions enabled ${enabled}, recent runs ${parsedRuns.length}, ${workflow} runs ${workflowRuns.length}, passing ${workflow} runs ${hasPassingRun ? 'yes' : 'no'}, permissions command ${permissions.ok ? 'ok' : 'failed'}, run list ${runs.ok ? 'ok' : 'failed'}${dispatchDetail}.`
   });
   return {
     summary,
     permissions: parsedPermissions,
     dispatch: dispatch ? summarizeCommand(dispatch) : undefined,
     runs: parsedRuns,
+    workflow,
+    workflowRuns,
     errors: {
       permissions: permissions.ok ? undefined : commandMessage(permissions),
       runs: runs.ok ? undefined : commandMessage(runs)
@@ -488,21 +491,24 @@ function publishBlockers({ npm, account, publicFace, actions, repository, npmCom
     const ownerStatus = publicFace.github?.owner?.status;
     const githubStatus = publicFace.github?.status;
     const npmStatus = publicFace.npm?.status;
+    const failedChecks = failedPublicFaceChecks(publicFace);
     const hasNotFound = [ownerStatus, githubStatus, npmStatus].some((status) => status === 404);
+    const localOnly = failedChecks.length > 0 && failedChecks.every((check) => check.id === 'readme_badges');
     blockers.push({
       id: hasNotFound ? 'public_face_404' : 'public_face_failed',
       source: 'public',
-      title: 'Make the public GitHub and npm face visible without credentials.',
-      detail: `owner ${ownerStatus ?? 'unknown'}, repository ${githubStatus ?? 'unknown'}, npm ${npmStatus ?? 'unknown'}.`,
+      title: localOnly ? 'Fix the README badge contract before public launch.' : 'Make the public GitHub and npm face visible without credentials.',
+      detail: publicFaceFailureDetail(publicFace),
       evidence: {
         checkId: 'public_face',
         ownerStatus,
         githubStatus,
-        npmStatus
+        npmStatus,
+        failedChecks
       },
-      nextAction: account?.blocker === 'account_flagged_as_spammy' ? 'Clear the GitHub account-level visibility blocker first, then publish the npm package and rerun profile --check-public.' : 'Verify the GitHub owner, GitHub repository, and npm package are reachable anonymously, then rerun profile --check-public.',
-      scope: 'external_platform',
-      localFixable: false,
+      nextAction: localOnly ? 'Restore the README first-screen badge contract locally, then rerun profile --check-public.' : account?.blocker === 'account_flagged_as_spammy' ? 'Clear the GitHub account-level visibility blocker first, then publish the npm package and rerun profile --check-public.' : 'Verify the GitHub owner, GitHub repository, and npm package are reachable anonymously, then rerun profile --check-public.',
+      scope: localOnly ? 'local' : 'external_platform',
+      localFixable: localOnly,
       supportCategory: 'public_visibility'
     });
   }
@@ -557,6 +563,28 @@ function publishReadinessSummary({ npm, blockers }) {
   };
 }
 
+function failedPublicFaceChecks(publicFace) {
+  return (publicFace?.checks ?? [])
+    .filter((check) => check.severity !== 'advisory' && !check.pass)
+    .map((check) => ({
+      id: check.id,
+      label: check.label,
+      detail: check.detail
+    }));
+}
+
+function publicFaceCheckDetail(publicFace) {
+  const failed = failedPublicFaceChecks(publicFace);
+  if (failed.length === 0) return `public face ${publicFace?.status ?? 'unknown'}, owner ${publicFace?.github?.owner?.status ?? 'unknown'}, github ${publicFace?.github?.status ?? 'unknown'}, npm ${publicFace?.npm?.status ?? 'unknown'}.`;
+  return `public face ${publicFace?.status ?? 'unknown'}, failed required checks ${failed.map((check) => check.id).join(', ')}.`;
+}
+
+function publicFaceFailureDetail(publicFace) {
+  const failed = failedPublicFaceChecks(publicFace);
+  if (failed.length > 0) return failed.map((check) => `${check.id}: ${check.detail}`).join(' ');
+  return `owner ${publicFace?.github?.owner?.status ?? 'unknown'}, repository ${publicFace?.github?.status ?? 'unknown'}, npm ${publicFace?.npm?.status ?? 'unknown'}.`;
+}
+
 function actionsUserDisabled(actions) {
   const dispatchMessage = `${actions?.dispatch?.stderr ?? ''} ${actions?.dispatch?.message ?? ''}`;
   return /Actions has been disabled for this user/i.test(dispatchMessage);
@@ -570,12 +598,15 @@ function githubSupportMessage({ repository, publicFace, actions }) {
   const actionsEvidence = actionsUserDisabled(actions)
     ? 'GitHub Actions repository permissions are enabled, but workflow dispatch reports that Actions has been disabled for this user.'
     : undefined;
+  const closing = actionsEvidence
+    ? 'Please review the account-level visibility restriction and the account-level Actions restriction shown in the attached publish preflight evidence.'
+    : 'Please review the account-level visibility restriction shown in the attached publish preflight evidence.';
   return [
     `My account owns ${repository}.`,
     'Authenticated GitHub API shows this repository is public and private=false, but authenticated repository search reports that the user is flagged as spammy.',
     publicEvidence,
     actionsEvidence,
-    'Please review the account-level visibility restriction and any account-level Actions restriction shown in the attached publish preflight evidence.'
+    closing
   ].filter(Boolean).join(' ');
 }
 

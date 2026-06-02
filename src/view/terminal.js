@@ -285,7 +285,7 @@ export function renderPublishReadiness(report) {
   const blockers = (report.blockers ?? []).map((blocker) => `${MAGENTA}${blocker.id}${RESET} ${DIM}${compactText(blocker.nextAction, 112)}${RESET}`);
   return [
     title('publish readiness'),
-    `${BOLD}${mark}${RESET} ${DIM}${report.package?.name}@${report.package?.version} publish preflight for package surface, npm registry auth, public visibility, and launch evidence.${RESET}`,
+    `${BOLD}${mark}${RESET} ${DIM}${report.package?.name}@${report.package?.version} publish preflight for package surface, npm registry auth, public visibility, and GitHub Actions evidence.${RESET}`,
     `${pad('npm command', 16)} ${report.npm?.command ?? 'npm'}`,
     `${pad('npm evidence', 16)} ${npmEvidence}`,
     `${pad('local evidence', 16)} ${localEvidence}`,

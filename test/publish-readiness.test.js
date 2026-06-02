@@ -37,6 +37,7 @@ test('publish readiness passes when package, npm, auth, and Actions evidence are
   assert.match(output, /local evidence/);
   assert.match(output, /npm publish dry-run/);
   assert.match(output, /GitHub Actions/);
+  assert.doesNotMatch(output, /launch evidence/);
   assert.doesNotMatch(output, /--support-pack proofroute-publish-support-pack/);
 });
 
@@ -79,6 +80,25 @@ test('publish readiness can probe workflow dispatch errors explicitly', async ()
   assert.match(renderPublishSupportNote(report), /Actions has been disabled for this user/);
 });
 
+test('publish readiness requires a passing run from the requested workflow', async () => {
+  const report = await publishReadinessReport({
+    checkActions: true,
+    runner: fakePublishRunner({
+      auth: true,
+      actionsRuns: [{
+        workflowName: 'Unrelated',
+        status: 'completed',
+        conclusion: 'success',
+        headSha: 'abc123'
+      }]
+    })
+  });
+  assert.equal(report.status, 'fail');
+  assert.equal(report.actions.summary.pass, false);
+  assert.match(report.actions.summary.detail, /ProofRoute CI runs 0/);
+  assert.ok(report.blockers.some((blocker) => blocker.id === 'github_actions_not_passing'));
+});
+
 test('publish readiness contrasts authenticated GitHub visibility with anonymous public face', async () => {
   const report = await publishReadinessReport({
     checkPublic: true,
@@ -98,6 +118,7 @@ test('publish readiness contrasts authenticated GitHub visibility with anonymous
   assert.equal(report.checks.find((check) => check.id === 'github_account_visibility').pass, true);
   assert.equal(report.checks.find((check) => check.id === 'public_face').pass, false);
   assert.ok(report.blockers.some((blocker) => blocker.id === 'public_face_404' && blocker.evidence.githubStatus === 404 && blocker.evidence.npmStatus === 404));
+  assert.ok(report.blockers.some((blocker) => blocker.id === 'public_face_404' && blocker.evidence.failedChecks.some((check) => check.id === 'github_public')));
   const output = renderPublishReadiness(report);
   assert.match(output, /github auth/);
   assert.match(output, /account/);
@@ -137,6 +158,7 @@ test('publish readiness reports account-level GitHub visibility blockers', async
   assert.match(supportNote, /flagged as spammy/);
   assert.match(supportNote, /Npm evidence is command npm, version 11\.16\.0/);
   assert.match(supportNote, /Local publish evidence is pass with remaining scope external_or_operator/);
+  assert.doesNotMatch(supportNote, /Actions restriction/);
   assert.doesNotMatch(supportNote, /Actions has been disabled for this user/);
   assert.doesNotMatch(supportNote, /PUBLISH READINESS|\x1b\[/);
   assert.doesNotMatch(supportNote, /NODE_AUTH_TOKEN|secret-token/);
