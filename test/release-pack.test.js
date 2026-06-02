@@ -46,6 +46,7 @@ test('release proof pack writes prompt-free launch evidence and assets', async (
     assert.equal(report.kind, 'proofroute-release-proof-pack-v1');
     assert.equal(report.status, 'warn');
     assert.equal(report.launch.github.status, 'pass');
+    assert.equal(report.launch.assets.length, 3);
     assert.ok(report.files.some((file) => file.endsWith('launch-readiness.json')));
     assert.ok(report.files.some((file) => file.endsWith('repository-profile.json')));
     assert.ok(report.files.some((file) => file.endsWith('git-provenance.json')));
@@ -63,6 +64,10 @@ test('release proof pack writes prompt-free launch evidence and assets', async (
     const launchCopy = await readFile(join(outDir, 'launch-copy.md'), 'utf8');
     const output = renderReleaseProofPack(report);
     assert.match(output, /RELEASE PROOF PACK/);
+    assert.match(output, /local proof/);
+    assert.match(output, /speedup/);
+    assert.match(output, /p95/);
+    assert.match(output, /checks/);
     assert.match(renderHelp(), /proofroute release/);
     assert.match(launchCopy, /ProofRoute Launch Copy/);
     assert.match(launchCopy, /Vibe Coding paragraph/);
@@ -94,6 +99,7 @@ test('release proof pack fails stale classifier evidence when freshness is requi
     });
     const freshness = report.launch.evidence.checks.find((check) => check.id === 'evidence_freshness');
     assert.equal(report.status, 'fail');
+    assert.equal(report.launch.assets.length, 3);
     assert.equal(report.launch.status, 'fail');
     assert.equal(freshness.pass, false);
     assert.equal(report.git.dirty, true);
@@ -368,11 +374,16 @@ test('release preflight reports strict hardware blockers without writing pack fi
     });
     assert.equal(report.kind, 'proofroute-release-preflight-v1');
     assert.equal(report.status, 'fail');
+    assert.equal(report.launch.assets.length, 3);
     assert.equal(existsSync(outDir), false);
     assert.equal(report.evidenceFiles.find((file) => file.claim === 'hardware').status, 'fail');
     assert.ok(report.evidenceFiles.find((file) => file.claim === 'hardware').failedChecks.some((check) => check.id === 'hardware_probe'));
     const output = renderReleasePreflight(report);
     assert.match(output, /RELEASE PREFLIGHT/);
+    assert.match(output, /local proof/);
+    assert.match(output, /speedup/);
+    assert.match(output, /p95/);
+    assert.match(output, /checks/);
     assert.match(output, /hardware proof/);
     assert.match(output, /hardware_probe/);
     assert.doesNotMatch(`${JSON.stringify(report)}\n${output}`, promptLeakPattern);
@@ -411,6 +422,7 @@ test('release preflight fails explicit public face gate on anonymous GitHub or n
     assert.equal(report.launch.checks.find((check) => check.id === 'public_repository_face').status, 'fail');
     assert.equal(existsSync(outDir), false);
     const output = renderReleasePreflight(report);
+    assert.match(output, /local proof/);
     assert.match(output, /public face/);
     assert.doesNotMatch(`${JSON.stringify(report)}\n${output}`, promptLeakPattern);
   } finally {

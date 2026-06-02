@@ -217,11 +217,13 @@ export function renderReleaseProofPack(report) {
   const age = report.launch?.evidence?.status === 'not_claimed' ? 'not claimed' : report.launch?.evidence?.evidenceAgeMs === undefined ? 'untracked' : `${(Number(report.launch.evidence.evidenceAgeMs) / 3600000).toFixed(2)}h`;
   const artifactAge = report.launch?.artifactEvidence?.evidenceAgeMs === undefined ? undefined : `${(Number(report.launch.artifactEvidence.evidenceAgeMs) / 3600000).toFixed(2)}h`;
   const blockers = evidenceFailureRows(report.launch?.evidence, 'evidence').concat(evidenceFailureRows(report.launch?.artifactEvidence, 'artifact'));
+  const localProof = releaseLocalProofLine(report.launch, report.assetCopies);
   const copiedAssets = (report.assetCopies ?? []).filter((asset) => asset.status === 'copied').length;
   const files = (report.files ?? []).slice(0, 8).map((file) => `${DIM}${file}${RESET}`);
   return [
     title('release proof pack'),
     `${BOLD}${mark}${RESET} ${DIM}${report.outDir}${RESET} now contains a prompt-free release evidence pack.`,
+    `${pad('local proof', 16)} ${localProof}`,
     `${pad('github face', 16)} ${github}`,
     `${pad('public face', 16)} ${publicFace}`,
     `${pad('source', 16)} ${source}`,
@@ -245,10 +247,12 @@ export function renderReleasePreflight(report) {
   const evidenceLabel = releaseEvidenceLabel(report.launch?.evidence);
   const artifact = report.launch?.artifactEvidence ? `${report.launch.artifactEvidence.status ?? 'unknown'} claim ${report.launch.artifactEvidence.claim ?? 'local_artifact'} ${report.launch.artifactEvidence.path ?? 'classifier-linear-evidence.json'}` : undefined;
   const blockers = evidenceFailureRows(report.launch?.evidence, 'evidence').concat(evidenceFailureRows(report.launch?.artifactEvidence, 'artifact'));
+  const localProof = releaseLocalProofLine(report.launch);
   const files = (report.wouldWrite ?? []).map((file) => `${DIM}${file}${RESET}`);
   return [
     title('release preflight'),
     `${BOLD}${mark}${RESET} ${DIM}${report.outDir}${RESET} was checked without writing a release proof pack.`,
+    `${pad('local proof', 16)} ${localProof}`,
     `${pad('github face', 16)} ${github}`,
     `${pad('public face', 16)} ${publicFace}`,
     `${pad('source', 16)} ${source}`,
@@ -273,7 +277,7 @@ export function renderPublishReadiness(report) {
   const actions = report.actions ? `${report.actions.summary?.pass ? 'pass' : 'fail'} enabled ${report.actions.permissions?.enabled === true ? 'yes' : 'unknown'} runs ${(report.actions.runs ?? []).length}${report.actions.dispatch ? ` dispatch ${report.actions.dispatch.ok ? 'ok' : 'fail'}` : ''}` : 'not checked';
   const npmEvidence = renderNpmPublishEvidence(report.npm?.evidence);
   const localEvidence = renderPublishLocalEvidence(report.summary);
-  const supportPack = report.supportPack ? `${report.supportPack.status ?? report.status ?? 'unknown'} ${report.supportPack.outDir ?? 'proofroute-publish-support-pack'} files ${(report.supportPack.files ?? []).length}` : undefined;
+  const supportPack = report.supportPack ? publishSupportPackDisplay(report.supportPack) : undefined;
   const blockers = (report.blockers ?? []).map((blocker) => `${MAGENTA}${blocker.id}${RESET} ${DIM}${compactText(blocker.nextAction, 112)}${RESET}`);
   return [
     title('publish readiness'),
@@ -333,6 +337,14 @@ function renderNpmPublishEvidence(evidence) {
   return compactText(`${version}, pack ${evidence.pack ?? 'unknown'}, ${pack}, ${missing}, dry-run ${evidence.publishDryRun ?? 'unknown'}, auth ${evidence.auth ?? 'unknown'}`, 132);
 }
 
+function publishSupportPackDisplay(pack) {
+  const summary = pack.statusSummary;
+  const local = summary?.localEvidence ?? 'unknown';
+  const scope = summary?.remainingBlockerScope ?? 'unknown';
+  const blockers = Array.isArray(summary?.blockerIds) ? summary.blockerIds.length : pack.blockerIds?.length ?? 0;
+  return compactText(`${pack.status ?? 'unknown'} ${pack.outDir ?? 'proofroute-publish-support-pack'} files ${(pack.files ?? []).length}, status.json local ${local}, scope ${scope}, blockers ${blockers}`, 132);
+}
+
 function renderPublishLocalEvidence(summary) {
   if (!summary) return 'not summarized';
   const remaining = summary.blockerIds?.length ? summary.blockerIds.join(', ') : 'none';
@@ -375,6 +387,26 @@ function releaseEvidenceDisplay(evidence) {
   const claim = evidence?.claim ?? 'classifier';
   const probe = evidence?.requireHardwareProbe ? 'hardware_probe required' : 'hardware_probe not required';
   return `${evidence?.status ?? 'unknown'} claim ${claim}, ${probe}`;
+}
+
+function releaseLocalProofLine(launch, assetCopies) {
+  if (!launch) return 'not attached';
+  const proof = launch.proof?.aggregate ?? {};
+  const checks = Array.isArray(launch.checks) ? launch.checks : [];
+  const passChecks = checks.filter((check) => check.status === 'pass').length;
+  const privacy = launch.privacy ? `privacy ${launch.privacy.status ?? 'unknown'}` : 'privacy unknown';
+  const assetCount = Array.isArray(assetCopies)
+    ? assetCopies.filter((asset) => asset.status === 'copied').length
+    : Array.isArray(launch.assets)
+      ? launch.assets.filter((asset) => asset.status === 'present').length
+      : launch.assets?.present;
+  const assetTotal = Array.isArray(assetCopies)
+    ? assetCopies.length
+    : Array.isArray(launch.assets)
+      ? launch.assets.length
+      : launch.assets?.expected;
+  const assets = Number.isFinite(Number(assetCount)) && Number.isFinite(Number(assetTotal)) ? `assets ${assetCount}/${assetTotal}` : 'assets unknown';
+  return compactText(`${launch.status ?? 'unknown'}, ${proof.count ?? 0} prompts, ${money(proof.savingsUsd ?? 0)} saved, ${Number(proof.averageSpeedup ?? 0).toFixed(2)}x speedup, ${ms(Number(proof.p95RouterMs ?? 0))} p95, ${percent(proof.p95RouterOverheadPct ?? 0)} overhead, checks ${passChecks}/${checks.length}, ${privacy}, ${assets}`, 132);
 }
 
 export function renderLaunchReadiness(report) {

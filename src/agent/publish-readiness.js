@@ -127,15 +127,18 @@ export async function writePublishSupportPack({ report, supportNote, outDir = 'p
   await mkdir(absoluteOut, { recursive: true });
   const files = [
     displayPath(cwd, join(absoluteOut, 'manifest.json')),
+    displayPath(cwd, join(absoluteOut, 'status.json')),
     displayPath(cwd, join(absoluteOut, 'publish-readiness.json')),
     displayPath(cwd, join(absoluteOut, 'publish-support-note.txt')),
     displayPath(cwd, join(absoluteOut, 'next-actions.md')),
     displayPath(cwd, join(absoluteOut, 'redaction-policy.txt'))
   ];
+  const statusSummary = publishSupportStatusSummary({ report, generatedAt });
   const pack = {
     kind: 'proofroute-publish-support-pack-v1',
     generatedAt,
     status: report.status ?? 'unknown',
+    readyToPublish: report.status === 'pass',
     outDir: displayPath(cwd, absoluteOut),
     package: {
       name: report.package?.name,
@@ -145,17 +148,19 @@ export async function writePublishSupportPack({ report, supportNote, outDir = 'p
     blockerIds: (report.blockers ?? []).map((blocker) => blocker.id),
     nextActionCount: (report.nextActions ?? []).length,
     npmEvidence: report.npm?.evidence,
+    statusSummary,
     files
   };
   const note = redactSupportDocument(supportNote ?? publishSupportNoteFallback(report));
   const markdown = publishSupportNextActionsMarkdown({ report, generatedAt });
   const redactionPolicy = publishSupportRedactionPolicy({ report, generatedAt });
   await writePackJson(join(absoluteOut, 'manifest.json'), redactSupportValue(pack));
+  await writePackJson(join(absoluteOut, 'status.json'), redactSupportValue(statusSummary));
   await writePackJson(join(absoluteOut, 'publish-readiness.json'), redactSupportValue(report));
   await writePackText(join(absoluteOut, 'publish-support-note.txt'), note);
   await writePackText(join(absoluteOut, 'next-actions.md'), markdown);
   await writePackText(join(absoluteOut, 'redaction-policy.txt'), redactionPolicy);
-  const leakSurface = `${JSON.stringify(redactSupportValue(report))}\n${note}\n${markdown}\n${redactionPolicy}`;
+  const leakSurface = `${JSON.stringify(redactSupportValue(report))}\n${JSON.stringify(redactSupportValue(statusSummary))}\n${note}\n${markdown}\n${redactionPolicy}`;
   if (/Refactor this webhook|Extract customer ids|Rewrite this README|secret production prompt|secret-token|sk-secret/i.test(leakSurface)) {
     throw new Error('publish support pack would expose prompt-like content or credential-shaped values.');
   }
@@ -583,6 +588,68 @@ function githubActionsSupportMessage({ repository, actions }) {
 function publishSupportNoteFallback(report) {
   const blockers = (report.blockers ?? []).map((blocker) => `${redactSupportText(blocker.id)}: ${redactSupportText(blocker.detail)}`).join(' ');
   return `ProofRoute publish preflight status is ${redactSupportText(report.status ?? 'unknown')}. ${blockers || 'No publish blockers were detected by this run.'}`;
+}
+
+function publishSupportStatusSummary({ report, generatedAt }) {
+  const summary = report.summary ?? {};
+  const npmEvidence = report.npm?.evidence ?? {};
+  const publicFace = report.public;
+  const actions = report.actions;
+  const account = report.account;
+  const github = report.github;
+  const blockerIds = (report.blockers ?? []).map((blocker) => blocker.id);
+  return {
+    kind: 'proofroute-publish-support-status-v1',
+    generatedAt,
+    status: report.status ?? 'unknown',
+    readyToPublish: report.status === 'pass',
+    localEvidence: summary.localEvidence ?? 'not_summarized',
+    remainingBlockerScope: summary.remainingBlockerScope ?? 'unknown',
+    blockerIds,
+    localFixableBlockerIds: summary.localFixableBlockerIds ?? [],
+    operatorBlockerIds: summary.operatorBlockerIds ?? [],
+    externalBlockerIds: summary.externalBlockerIds ?? [],
+    nextActionCount: (report.nextActions ?? []).length,
+    package: {
+      name: report.package?.name,
+      version: report.package?.version,
+      repository: report.package?.repository,
+      publishAccess: report.package?.publishAccess
+    },
+    npm: {
+      command: npmEvidence.command ?? report.npm?.command,
+      registry: npmEvidence.registry ?? report.npm?.registry,
+      cli: npmEvidence.cli ?? 'not_checked',
+      version: npmEvidence.version,
+      pack: npmEvidence.pack ?? 'not_checked',
+      requiredFilesChecked: npmEvidence.requiredFilesChecked,
+      requiredFilesMissing: npmEvidence.requiredFilesMissing,
+      publishDryRun: npmEvidence.publishDryRun ?? 'not_checked',
+      auth: npmEvidence.auth ?? 'not_checked',
+      package: npmEvidence.package
+    },
+    github: {
+      authenticated: github?.summary ? checkState(github.summary) : 'not_checked',
+      visibility: github?.repository?.visibility,
+      private: github?.repository?.isPrivate,
+      accountVisibility: account?.summary ? checkState(account.summary) : 'not_checked',
+      accountBlocker: account?.blocker,
+      publicFace: publicFace?.status ?? 'not_checked',
+      ownerStatus: publicFace?.github?.owner?.status,
+      repositoryStatus: publicFace?.github?.status,
+      npmStatus: publicFace?.npm?.status,
+      actions: actions?.summary ? checkState(actions.summary) : 'not_checked',
+      actionsEnabled: actions?.permissions?.enabled,
+      actionRunCount: actions?.runs?.length,
+      dispatch: actions?.dispatch ? actions.dispatch.ok ? 'pass' : 'fail' : 'not_checked'
+    },
+    support: {
+      categories: [...new Set((report.blockers ?? []).map((blocker) => blocker.supportCategory).filter(Boolean))],
+      localFixable: (summary.localFixableBlockerIds ?? []).length > 0,
+      operatorActionRequired: (summary.operatorBlockerIds ?? []).length > 0,
+      externalPlatformActionRequired: (summary.externalBlockerIds ?? []).length > 0
+    }
+  };
 }
 
 function npmEvidenceSummary(npm) {

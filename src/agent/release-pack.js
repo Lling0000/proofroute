@@ -122,6 +122,7 @@ export async function releaseProofPack({ controller, runtime, outDir = 'proofrou
       smoke: packLaunch.smoke,
       smokeMatrix: packLaunch.smokeMatrix,
       privacy: packLaunch.privacy,
+      assets: packLaunch.assets,
       evidence: packLaunch.evidence,
       artifactEvidence: packLaunch.artifactEvidence
     },
@@ -219,6 +220,7 @@ export async function releasePreflightReport({ controller, runtime, outDir = 'pr
       smoke: launch.smoke,
       smokeMatrix: launch.smokeMatrix,
       privacy: launch.privacy,
+      assets: launch.assets,
       evidence: launch.evidence,
       artifactEvidence: launch.artifactEvidence
     },

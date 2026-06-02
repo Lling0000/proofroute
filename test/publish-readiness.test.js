@@ -211,14 +211,27 @@ test('publish support pack writes redacted evidence files without changing block
     const pack = await writePublishSupportPack({ report, supportNote, outDir, now: '2026-06-01T00:01:00.000Z' });
     assert.equal(pack.kind, 'proofroute-publish-support-pack-v1');
     assert.equal(pack.status, 'fail');
+    assert.equal(pack.readyToPublish, false);
     assert.deepEqual(pack.blockerIds, ['npm_auth_missing']);
+    assert.equal(pack.statusSummary.kind, 'proofroute-publish-support-status-v1');
+    assert.equal(pack.statusSummary.readyToPublish, false);
+    assert.deepEqual(pack.statusSummary.blockerIds, ['npm_auth_missing']);
+    assert.equal(pack.statusSummary.support.operatorActionRequired, false);
     assert.ok(existsSync(join(outDir, 'manifest.json')));
+    assert.ok(existsSync(join(outDir, 'status.json')));
     assert.ok(existsSync(join(outDir, 'publish-readiness.json')));
     assert.ok(existsSync(join(outDir, 'publish-support-note.txt')));
     assert.ok(existsSync(join(outDir, 'next-actions.md')));
     assert.ok(existsSync(join(outDir, 'redaction-policy.txt')));
+    const status = JSON.parse(await readFile(join(outDir, 'status.json'), 'utf8'));
+    assert.equal(status.kind, 'proofroute-publish-support-status-v1');
+    assert.equal(status.status, 'fail');
+    assert.equal(status.readyToPublish, false);
+    assert.equal(status.localEvidence, 'not_summarized');
+    assert.equal(status.github.publicFace, 'not_checked');
     const combined = [
       await readFile(join(outDir, 'manifest.json'), 'utf8'),
+      await readFile(join(outDir, 'status.json'), 'utf8'),
       await readFile(join(outDir, 'publish-readiness.json'), 'utf8'),
       await readFile(join(outDir, 'publish-support-note.txt'), 'utf8'),
       await readFile(join(outDir, 'next-actions.md'), 'utf8'),
@@ -277,9 +290,16 @@ if (args[0] === '--version') {
     assert.equal(packReport.kind, 'proofroute-publish-readiness-v1');
     assert.equal(packReport.supportPack.kind, 'proofroute-publish-support-pack-v1');
     assert.equal(packReport.supportPack.status, 'fail');
+    assert.equal(packReport.supportPack.statusSummary.kind, 'proofroute-publish-support-status-v1');
+    assert.equal(packReport.supportPack.statusSummary.localEvidence, 'pass');
     assert.ok(existsSync(join(packDir, 'manifest.json')));
+    assert.ok(existsSync(join(packDir, 'status.json')));
     assert.ok(existsSync(join(packDir, 'publish-readiness.json')));
     assert.ok(existsSync(join(packDir, 'publish-support-note.txt')));
+    const packStatus = JSON.parse(await readFile(join(packDir, 'status.json'), 'utf8'));
+    assert.equal(packStatus.readyToPublish, false);
+    assert.equal(packStatus.localEvidence, 'pass');
+    assert.deepEqual(packStatus.operatorBlockerIds, ['npm_auth_missing']);
     const packNote = await readFile(join(packDir, 'publish-support-note.txt'), 'utf8');
     assert.match(packNote, /ProofRoute publish support note/);
     assert.match(packNote, /\nBlockers\n/);
