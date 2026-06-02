@@ -2,7 +2,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-[![Proof](https://img.shields.io/badge/local%20proof-zero--network-22c55e)](#quick-start) [![GitHub](https://img.shields.io/badge/github-Lling0000%2Fproofroute-181717?logo=github)](https://github.com/Lling0000/proofroute) [![License](https://img.shields.io/badge/license-MIT-2ea44f)](LICENSE) [![Node](https://img.shields.io/badge/node-%3E%3D20-339933?logo=nodedotjs)](package.json) [![Dependencies](https://img.shields.io/badge/runtime%20dependencies-zero-0ea5e9)](package.json) [![Proxy](https://img.shields.io/badge/OpenAI-compatible%20proxy-111827)](#openai-proxy) [![Architecture](https://img.shields.io/badge/architecture-Agent--View--Controller-7c3aed)](docs/architecture.md)
+[![Proof](https://img.shields.io/badge/route%20split-zero--network-22c55e)](#quick-start) [![GitHub](https://img.shields.io/badge/github-Lling0000%2Fproofroute-181717?logo=github)](https://github.com/Lling0000/proofroute) [![License](https://img.shields.io/badge/license-MIT-2ea44f)](LICENSE) [![Node](https://img.shields.io/badge/node-%3E%3D20-339933?logo=nodedotjs)](package.json) [![Dependencies](https://img.shields.io/badge/runtime%20dependencies-zero-0ea5e9)](package.json) [![Proxy](https://img.shields.io/badge/OpenAI-compatible%20proxy-111827)](#openai-proxy) [![Architecture](https://img.shields.io/badge/architecture-Agent--View--Controller-7c3aed)](docs/architecture.md)
 
 Release status: direct checkout commands are the source of truth until `node ./bin/proofroute.js profile --check-public` proves the public face and `node ./bin/proofroute.js publish --check-public --check-actions` proves the final install-copy gate.
 
@@ -12,7 +12,7 @@ It is built for developers who do not want to pause a Vibe Coding session to com
 
 ![ProofRoute terminal proof](docs/proofroute-terminal.svg)
 
-The first command is deliberately this early because the project earns attention only when it proves itself before setup work begins. Run the demo from a fresh clone to see the local routing proof, estimated savings, p95 Controller latency, speed lift, intent accuracy, and route mix without a network call, API key, hosted dashboard, npm publish state, or provider configuration.
+The first command is deliberately this early because the project earns attention only when it proves itself before setup work begins. Run the demo from a fresh clone to see the local routing proof, local/cloud route split, estimated savings, p95 Controller latency, speed lift, intent accuracy, and route mix without a network call, API key, hosted dashboard, npm publish state, or provider configuration. The cloud rows in that receipt are selected targets inside the zero-network decision, not live provider calls.
 
 ```sh
 node ./bin/proofroute.js demo
@@ -27,7 +27,7 @@ node ./bin/proofroute.js smoke --proxy
 
 The architecture follows Agent-View-Controller because routing has to be fast, explainable, and easy to harden. The Controller owns local intent recognition, token estimation, context fit checks, cost modeling, latency modeling, and numerically stable Softmax ranking. The Agent owns asynchronous provider execution, OpenAI-compatible forwarding, Ollama adaptation, fallback execution, proxy lifecycle, and benchmark orchestration. The View owns terminal-native proof cards, route traces, Markdown receipts, connection cards, model maps, privacy reports, launch checks, and classifier receipts.
 
-The default experience is intentionally zero configuration. A developer can clone the repository, run the demo, and see a local proof card before any network call, API key, provider setup, or hosted dashboard exists. When the proxy is started, existing SDKs, editor extensions, CLIs, and coding agents can point their OpenAI base URL at ProofRoute and continue using familiar endpoints while the router quietly swaps in the model that fits the task.
+The default experience is intentionally zero configuration. A developer can clone the repository, run the demo, and see a local proof card with provider calls fixed at zero before any API key, provider setup, or hosted dashboard exists. When the proxy is started, existing SDKs, editor extensions, CLIs, and coding agents can point their OpenAI base URL at ProofRoute and continue using familiar endpoints while the router quietly swaps in the model that fits the task.
 
 ## Quick Start
 

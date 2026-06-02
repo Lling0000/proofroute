@@ -22,7 +22,9 @@ test('repository profile keeps public metadata executable and shareable', async 
   assert.match(report.npm.description, /coding agents/);
   assert.equal(report.social.badges.length, 7);
   assert.equal(report.social.badges[0].id, 'proof');
+  assert.match(report.social.badges[0].image, /route%20split-zero--network/);
   assert.match(report.social.shortPitch, /zero-dependency OpenAI-compatible proxy/);
+  assert.match(report.social.shortPitch, /local\/cloud split/);
   assert.match(report.commands.firstProof, /proofroute\.js demo/);
   assert.equal(report.commands.publicFace, 'node ./bin/proofroute.js profile --check-public');
   assert.equal(report.commands.npmDryRun, 'npm run release:npm:dry-run');

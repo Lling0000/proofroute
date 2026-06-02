@@ -30,7 +30,7 @@ const readmeBadges = Object.freeze([
   Object.freeze({
     id: 'proof',
     alt: 'Proof',
-    image: 'https://img.shields.io/badge/local%20proof-zero--network-22c55e',
+    image: 'https://img.shields.io/badge/route%20split-zero--network-22c55e',
     target: '#quick-start'
   }),
   Object.freeze({
@@ -76,7 +76,7 @@ const social = {
   acceleratorPreview: 'docs/proofroute-classifier.svg',
   benchmarkPreview: 'docs/proofroute-classifier-benchmark.svg',
   badges: readmeBadges,
-  shortPitch: 'ProofRoute is a zero-dependency OpenAI-compatible proxy that routes every coding-agent prompt to the cheapest fast-enough local or cloud model, then prints a terminal receipt with p95 router latency, speed lift, and exact savings without logging prompt text.',
+  shortPitch: 'ProofRoute is a zero-dependency OpenAI-compatible proxy that routes every coding-agent prompt to the cheapest fast-enough local or cloud model, then prints a zero-network terminal receipt with local/cloud split, p95 router latency, speed lift, and exact savings without logging prompt text.',
   vibePitch: 'Point your coding agent at one local OpenAI-compatible endpoint, let ProofRoute pick the right model before you notice the choice, and keep a prompt-free receipt of what got faster and cheaper.'
 };
 

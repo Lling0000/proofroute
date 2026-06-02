@@ -227,7 +227,7 @@ export class AgentRuntime {
     const startedAt = performance.now();
     const routes = [];
     const routeStartedAt = performance.now();
-    const decisions = await routeMany(controller, samples.map((sample) => ({ prompt: sample.prompt, policy })));
+    const decisions = await routeMany(controller, samples.map((sample) => ({ prompt: sample.prompt, policy: policy ?? sample.policy })));
     const routeLatencyMs = Math.max(0.01, (performance.now() - routeStartedAt) / Math.max(1, samples.length));
     for (let index = 0; index < samples.length; index += 1) {
       const sample = samples[index];
@@ -1280,11 +1280,13 @@ function launchDemoSamples() {
     {
       id: 'json-harvest',
       intent: 'extraction',
+      policy: 'save',
       prompt: 'Extract customer ids, invoice totals, and renewal dates into strict JSON with a stable schema.'
     },
     {
       id: 'launch-copy',
       intent: 'writing',
+      policy: 'save',
       prompt: 'Rewrite this README introduction so the launch feels credible, sharp, and easy to share.'
     },
     {

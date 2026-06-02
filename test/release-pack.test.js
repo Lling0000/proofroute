@@ -69,7 +69,9 @@ test('release proof pack writes prompt-free launch evidence and assets', async (
     assert.match(output, /p95/);
     assert.match(output, /checks/);
     assert.match(renderHelp(), /proofroute release/);
+    assert.match(markdown, /split 2\/5 routes to local models and 3\/5 routes to cloud models/);
     assert.match(launchCopy, /ProofRoute Launch Copy/);
+    assert.match(launchCopy, /split 2\/5 routes to local models and 3\/5 routes to cloud models/);
     assert.match(launchCopy, /Vibe Coding paragraph/);
     assert.doesNotMatch(`${JSON.stringify(report)}\n${markdown}\n${launchCopy}\n${output}`, secretLeakPattern);
   } finally {
@@ -225,7 +227,9 @@ test('core release proof pack passes without accelerator evidence', async () => 
     const markdown = await readFile(join(outDir, 'proofroute-release.md'), 'utf8');
     const launchCopy = await readFile(join(outDir, 'launch-copy.md'), 'utf8');
     assert.match(markdown, /proxy matrix is pass across 4\/4 scenarios/);
+    assert.match(markdown, /cloud route means selected target rather than a live cloud call/);
     assert.match(launchCopy, /no CUDA, TensorRT, or multi-GPU claim/);
+    assert.match(launchCopy, /cloud route means selected target rather than a live cloud call/);
     assert.match(launchCopy, /transparent proxy matrix proves 4\/4 intent, context, and cost scenarios/);
     assert.doesNotMatch(`${JSON.stringify(report)}\n${markdown}\n${launchCopy}`, promptLeakPattern);
   } finally {

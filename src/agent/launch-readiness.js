@@ -14,7 +14,7 @@ const defaultAssets = Object.freeze([
 const assetExpectations = Object.freeze({
   'docs/proofroute-terminal.svg': Object.freeze({
     title: 'ProofRoute shareable routing proof',
-    terms: ['ProofRoute', 'zero-network launch proof', 'prompt-free proof', 'saved', 'speed lift', 'p95 router']
+    terms: ['ProofRoute', 'zero-network launch proof', 'prompt-free proof', 'provider calls 0', 'local routes', 'cloud routes', '2/5', '3/5', 'balanced:3, save:2', 'llama3.2:3b:2', 'saved', 'speed lift', 'p95 router']
   }),
   'docs/proofroute-classifier.svg': Object.freeze({
     title: 'ProofRoute classifier accelerator proof',

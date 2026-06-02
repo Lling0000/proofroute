@@ -2,7 +2,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-[![Proof](https://img.shields.io/badge/local%20proof-zero--network-22c55e)](#快速开始) [![GitHub](https://img.shields.io/badge/github-Lling0000%2Fproofroute-181717?logo=github)](https://github.com/Lling0000/proofroute) [![License](https://img.shields.io/badge/license-MIT-2ea44f)](LICENSE) [![Node](https://img.shields.io/badge/node-%3E%3D20-339933?logo=nodedotjs)](package.json) [![Dependencies](https://img.shields.io/badge/runtime%20dependencies-zero-0ea5e9)](package.json) [![Proxy](https://img.shields.io/badge/OpenAI-compatible%20proxy-111827)](#openai-兼容代理) [![Architecture](https://img.shields.io/badge/architecture-Agent--View--Controller-7c3aed)](docs/architecture.md)
+[![Proof](https://img.shields.io/badge/route%20split-zero--network-22c55e)](#快速开始) [![GitHub](https://img.shields.io/badge/github-Lling0000%2Fproofroute-181717?logo=github)](https://github.com/Lling0000/proofroute) [![License](https://img.shields.io/badge/license-MIT-2ea44f)](LICENSE) [![Node](https://img.shields.io/badge/node-%3E%3D20-339933?logo=nodedotjs)](package.json) [![Dependencies](https://img.shields.io/badge/runtime%20dependencies-zero-0ea5e9)](package.json) [![Proxy](https://img.shields.io/badge/OpenAI-compatible%20proxy-111827)](#openai-兼容代理) [![Architecture](https://img.shields.io/badge/architecture-Agent--View--Controller-7c3aed)](docs/architecture.md)
 
 发布状态：在 `node ./bin/proofroute.js profile --check-public` 证明 public face、并且 `node ./bin/proofroute.js publish --check-public --check-actions` 证明最终 install-copy gate 之前，以本地 checkout 的直接 Node 命令为准。
 
@@ -12,7 +12,7 @@ ProofRoute 是为 Vibe Coding 准备的零运行时依赖、CLI-first、OpenAI �
 
 ![ProofRoute terminal proof](docs/proofroute-terminal.svg)
 
-第一条命令必须足够靠前，因为这个项目只有在配置之前就证明自己，才配得上开发者继续读下去。克隆仓库后直接运行 demo，就能在没有外部网络调用、没有 API key、没有托管 dashboard、没有 npm 发布状态、没有 provider 配置的情况下，看到本地路由证明、预估节省、p95 Controller 延迟、速度提升、意图准确率和路由分布。
+第一条命令必须足够靠前，因为这个项目只有在配置之前就证明自己，才配得上开发者继续读下去。克隆仓库后直接运行 demo，就能在没有外部网络调用、没有 API key、没有托管 dashboard、没有 npm 发布状态、没有 provider 配置的情况下，看到本地路由证明、本地与云端路由分流、预估节省、p95 Controller 延迟、速度提升、意图准确率和路由分布。收据里的 cloud 行只是零网络决策选出的目标模型，不代表真实 provider 已经被调用。
 
 ```sh
 node ./bin/proofroute.js demo
@@ -27,7 +27,7 @@ node ./bin/proofroute.js smoke --proxy
 
 ProofRoute 的架构遵循 Agent-View-Controller。Controller 负责本地意图识别、token 估算、上下文匹配、成本建模、延迟建模和数值稳定的 Softmax 排名。Agent 负责异步 provider 执行、OpenAI 兼容转发、Ollama 适配、fallback 执行和基准编排。View 负责终端原生 proof card、route trace、Markdown receipt、连接卡片、模型目录、统计视图、调优输出和 classifier receipt。这个边界让路由决策既快又可解释，也让未来的 GPU classifier 能替换 Controller 内部实现，而不破坏代理、证据和终端体验。
 
-默认体验刻意保持零配置。开发者可以克隆仓库，直接运行本地 demo，在没有 API key、没有网络调用、没有 provider 配置的情况下看到路由证明。真正启动代理后，现有 SDK、编辑器扩展、CLI 工具和 Agent 只需要把 OpenAI Base URL 指向 ProofRoute，就能继续调用熟悉的 chat completions 接口，而路由器会在后台根据意图、上下文、价格和延迟选择更合适的模型。
+默认体验刻意保持零配置。开发者可以克隆仓库，直接运行本地 demo，在 provider calls 固定为零的前提下看到路由证明，而不需要 API key、provider 配置或托管 dashboard。真正启动代理后，现有 SDK、编辑器扩展、CLI 工具和 Agent 只需要把 OpenAI Base URL 指向 ProofRoute，就能继续调用熟悉的 chat completions 接口，而路由器会在后台根据意图、上下文、价格和延迟选择更合适的模型。
 
 ## 快速开始
 

@@ -571,12 +571,14 @@ export function renderLaunchDemo(report) {
   const summary = report.aggregate;
   const accuracy = typeof summary.accuracy === 'number' ? pct(summary.accuracy) : 'unlabeled';
   const rows = report.routes.map((row) => {
-    return `${pad(row.actualIntent, 13)} ${pad(row.model, 20)} ${pct(row.confidence)} ${money(row.savingsUsd)} ${row.speedup.toFixed(2)}x ${ms(row.latencyMs)}`;
+    return `${pad(row.actualIntent, 13)} ${pad(row.model, 20)} ${pad(row.local ? 'local' : 'cloud', 7)} ${pct(row.confidence)} ${money(row.savingsUsd)} ${row.speedup.toFixed(2)}x ${ms(row.latencyMs)}`;
   });
   const costRatio = Math.min(1, Math.max(0, summary.savingsPct));
   const speedRatio = Math.min(1, Math.max(0, summary.averageSpeedup / 4));
   const overheadRatio = Math.min(1, Math.max(0, (summary.p95RouterOverheadPct ?? 0) / 1));
   const accuracyRatio = typeof summary.accuracy === 'number' ? summary.accuracy : 0;
+  const localRatio = summary.count ? summary.localRoutes / summary.count : 0;
+  const cloudRatio = summary.count ? summary.cloudRoutes / summary.count : 0;
   const hitCount = typeof summary.accuracy === 'number' ? Math.round(summary.accuracy * summary.labeled) : 0;
   const costWidth = Math.min(40, Math.max(3, Math.round(costRatio * 40)));
   const speedWidth = Math.min(40, Math.max(3, Math.round(speedRatio * 40)));
@@ -586,12 +588,14 @@ export function renderLaunchDemo(report) {
     `${GREEN}${money(summary.savingsUsd)} saved${RESET} against the priciest viable routes, with ${MAGENTA}${summary.averageSpeedup.toFixed(2)}x${RESET} average estimated speedup and ${CYAN}${accuracy}${RESET} labeled intent accuracy.`,
     '',
     `${pad('provider calls', 16)} ${summary.providerCalls ?? 0} before routing proof`,
+    `${pad('local routes', 16)} ${bar(localRatio, 40)} ${summary.localRoutes}/${summary.count}`,
+    `${pad('cloud routes', 16)} ${bar(cloudRatio, 40)} ${summary.cloudRoutes}/${summary.count}`,
     `${pad('money delta', 16)} ${GREEN}${'█'.repeat(costWidth)}${DIM}${'░'.repeat(40 - costWidth)}${RESET} ${pct(costRatio)}`,
     `${pad('speed lift', 16)} ${MAGENTA}${'█'.repeat(speedWidth)}${DIM}${'░'.repeat(40 - speedWidth)}${RESET} ${summary.averageSpeedup.toFixed(2)}x`,
     `${pad('route overhead', 16)} ${bar(overheadRatio, 40)} ${percent(summary.p95RouterOverheadPct ?? 0)}`,
     `${pad('intent hits', 16)} ${bar(accuracyRatio, 40)} ${hitCount}/${summary.labeled}`,
     '',
-    `${pad('intent', 13)} ${pad('model', 20)} confidence savings    speed router`,
+    `${pad('intent', 13)} ${pad('model', 20)} route   confidence savings    speed router`,
     ...rows,
     '',
     `intent mix ${compactCounts(summary.intents)}   policy mix ${compactCounts(summary.policies ?? {}) || 'none'}   classifier mix ${compactCounts(summary.classifierBackends ?? {}) || 'none'}   model mix ${compactCounts(summary.models)}`
@@ -662,7 +666,8 @@ export function renderShareSvg(report) {
   const cloudRatio = summary.count ? summary.cloudRoutes / summary.count : 0;
   const savingsRatio = Math.min(1, Math.max(0, summary.savingsPct));
   const speedRatio = Math.min(1, Math.max(0, summary.averageSpeedup / 4));
-  const source = ledger ? `local telemetry proof${ledgerScope(report)}` : 'zero-network launch proof';
+  const routeSplit = `${summary.localRoutes}/${summary.count} local and ${summary.cloudRoutes}/${summary.count} cloud`;
+  const source = ledger ? `local telemetry proof${ledgerScope(report)}` : `zero-network launch proof, split ${routeSplit}`;
   const policyMix = compactCounts(summary.policies ?? {}) || 'none';
   const overheadText = `   overhead ${percent(summary.p95RouterOverheadPct ?? 0)}`;
   const swapText = Number(summary.modelSwaps ?? 0) > 0 ? `   swaps ${summary.modelSwaps}/${summary.count}` : '';
@@ -674,7 +679,7 @@ export function renderShareSvg(report) {
   return [
     '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720" role="img" aria-labelledby="title desc">',
     '<title id="title">ProofRoute shareable routing proof</title>',
-    `<desc id="desc">ProofRoute routed ${summary.count} prompts with ${ms(summary.p95RouterMs)} p95 decision time and ${money(summary.savingsUsd)} savings.</desc>`,
+    `<desc id="desc">ProofRoute routed ${summary.count} prompts with ${ms(summary.p95RouterMs)} p95 decision time, ${money(summary.savingsUsd)} savings, and ${routeSplit} routes.</desc>`,
     '<rect width="1200" height="720" rx="32" fill="#070a12"/>',
     '<rect x="34" y="34" width="1132" height="652" rx="28" fill="#0e1422" stroke="#263244" stroke-width="2"/>',
     '<rect x="64" y="64" width="1072" height="96" rx="20" fill="#111827"/>',
@@ -1451,7 +1456,10 @@ function proofValue(value, unit) {
 function shareCopyLine(summary, report) {
   const source = typeof report === 'string' ? report : report.source;
   const suffix = source === 'ledger' ? `from my private local routing ledger${typeof report === 'string' ? '' : ledgerScope(report)}` : 'before any provider call';
-  return `I routed ${summary.count} prompts with proofroute in ${ms(summary.p95RouterMs)} p95 decision time, saved ${money(summary.savingsUsd)}, and got ${summary.averageSpeedup.toFixed(2)}x estimated speedup ${suffix}.`;
+  const split = Number.isFinite(Number(summary.localRoutes)) && Number.isFinite(Number(summary.cloudRoutes))
+    ? `, split ${summary.localRoutes}/${summary.count} local and ${summary.cloudRoutes}/${summary.count} cloud`
+    : '';
+  return `I routed ${summary.count} prompts with proofroute in ${ms(summary.p95RouterMs)} p95 decision time${split}, saved ${money(summary.savingsUsd)}, and got ${summary.averageSpeedup.toFixed(2)}x estimated speedup ${suffix}.`;
 }
 
 function shareAccuracy(summary) {
