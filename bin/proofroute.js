@@ -14,7 +14,7 @@ import { publishReadinessReport, writePublishSupportPack } from '../src/agent/pu
 import { releasePreflightReport, releaseProofPack } from '../src/agent/release-pack.js';
 import { githubRepositoryStateReport, publicRepositoryFaceReport, repositoryProfileReport } from '../src/agent/repository-profile.js';
 import { runSmokeTest } from '../src/agent/smoke.js';
-import { readRouteEvents, readRouteEventsWithDiagnostics, recentRouteEvents, routeEventsInWindow, summarizeRouteEvents, telemetryPath } from '../src/agent/telemetry.js';
+import { readRouteEventsWithDiagnostics, recentRouteEvents, routeEventsInWindow, summarizeRouteEvents, telemetryPath } from '../src/agent/telemetry.js';
 import { exportTunedConfig, tuneFromEvents } from '../src/agent/tuner.js';
 import { demoCatalog, mergeConfig, readConfig } from '../src/config.js';
 import { ExternalClassifier } from '../src/controller/gpu-classifier.js';
@@ -44,19 +44,25 @@ try {
     const ledger = proofLedgerOverride(args);
     let report;
     if (ledger !== undefined) {
-      const { path, events, window } = await readLedgerWindow(config, ledger, args);
-      report = shareReportFromSummary(summarizeRouteEvents(events), path, window);
+      const { path, events, window, ledger: ledgerReport } = await readLedgerWindow(config, ledger, args);
+      report = { ...shareReportFromSummary(summarizeRouteEvents(events), path, window), ledger: ledgerReport };
     } else {
       const controller = new RouteController(config, createClassifier(config));
       const runtime = new AgentRuntime(config);
       report = await runtime.launchDemo({ controller, policy: args.policy });
     }
-    const output = args.json ? renderJson(report) : args.svg ? renderShareSvg(report) : args.markdown ? renderShareMarkdown(report) : renderShare(report);
-    if (args.out) {
+    const malformedLedger = report.ledger?.errorCount > 0;
+    if (malformedLedger && (args.svg || args.out)) {
+      console.error(ledgerParseErrorMessage(report));
+      process.exitCode = 1;
+    } else if (args.out) {
+      const output = args.json ? renderJson(report) : args.svg ? renderShareSvg(report) : args.markdown ? renderShareMarkdown(report) : renderShare(report);
       await writeTextFile(resolve(String(args.out)), output);
     } else {
+      const output = args.json ? renderJson(report) : args.svg ? renderShareSvg(report) : args.markdown ? renderShareMarkdown(report) : renderShare(report);
       process.stdout.write(`${output}\n`);
     }
+    if (report.ledger?.errorCount > 0) process.exitCode = 1;
   } else if (command === 'prove') {
     const config = await loadRuntimeConfig(args);
     const controller = new RouteController(config, createClassifier(config));
@@ -64,8 +70,8 @@ try {
     const ledger = proofLedgerOverride(args);
     let report;
     if (ledger !== undefined) {
-      const { path, events, window } = await readLedgerWindow(config, ledger, args);
-      report = { ...(await runtime.prove({ summary: summarizeRouteEvents(events), source: 'ledger', path, thresholds: proofThresholds(args) })), window };
+      const { path, events, window, ledger: ledgerReport } = await readLedgerWindow(config, ledger, args);
+      report = attachLedgerParseGuard({ ...(await runtime.prove({ summary: summarizeRouteEvents(events), source: 'ledger', path, thresholds: proofThresholds(args) })), window, ledger: ledgerReport });
     } else {
       report = await runtime.prove({ controller, policy: args.policy, thresholds: proofThresholds(args) });
     }
@@ -314,13 +320,18 @@ try {
     if (report.status === 'fail') process.exitCode = 1;
   } else if (command === 'tune') {
     const config = await loadRuntimeConfig(args);
-    const { path, events, window } = await readLedgerWindow(config, args.file, args);
-    const report = { path, window, ...tuneFromEvents(events, config) };
-    if (args.export) {
-      await writeJsonFile(resolve(String(args.export)), exportTunedConfig(config, report));
-      report.exported = resolve(String(args.export));
+    const { path, events, window, ledger } = await readLedgerWindow(config, args.file, args);
+    if (ledger.errorCount > 0) {
+      console.error(ledgerParseErrorMessage({ path, ledger }));
+      process.exitCode = 1;
+    } else {
+      const report = { path, window, ...tuneFromEvents(events, config) };
+      if (args.export) {
+        await writeJsonFile(resolve(String(args.export)), exportTunedConfig(config, report));
+        report.exported = resolve(String(args.export));
+      }
+      console.log(args.json ? renderJson(report) : renderTune(report));
     }
-    console.log(args.json ? renderJson(report) : renderTune(report));
   } else if (command === 'proxy') {
     const config = await loadRuntimeConfig(args);
     const classifier = createClassifier(config);
@@ -612,8 +623,8 @@ function proofLedgerOverride(args) {
 
 async function readLedgerWindow(config, override, args) {
   const path = telemetryPath(config, override);
-  const allEvents = await readRouteEvents(path);
-  return { path, ...routeEventsInWindow(allEvents, args.since) };
+  const ledger = await readRouteEventsWithDiagnostics(path);
+  return { path, ledger: ledgerDiagnostics(ledger), ...routeEventsInWindow(ledger.events, args.since) };
 }
 
 async function statsReport(config, args) {
@@ -625,16 +636,45 @@ async function statsReport(config, args) {
     path,
     summary,
     window,
-    ledger: {
-      exists: ledger.exists,
-      records: ledger.records,
-      bytes: ledger.bytes,
-      valid: ledger.events.length,
-      errorCount: ledger.errors.length,
-      errors: ledger.errors.slice(0, 8)
-    },
+    ledger: ledgerDiagnostics(ledger),
     recent: recentRouteEvents(events, nonNegativeInteger(args.recent ?? args.limit, 5))
   };
+}
+
+function ledgerDiagnostics(ledger) {
+  return {
+    exists: ledger.exists,
+    records: ledger.records,
+    bytes: ledger.bytes,
+    valid: ledger.events.length,
+    errorCount: ledger.errors.length,
+    errors: ledger.errors.slice(0, 8)
+  };
+}
+
+function attachLedgerParseGuard(report) {
+  const errorCount = Number(report.ledger?.errorCount ?? 0);
+  if (errorCount <= 0) return report;
+  return {
+    ...report,
+    status: 'fail',
+    checks: [
+      ...report.checks,
+      {
+        id: 'ledger_parse',
+        label: 'ledger parse',
+        value: errorCount,
+        target: 0,
+        direction: 'max',
+        unit: 'count',
+        pass: false
+      }
+    ]
+  };
+}
+
+function ledgerParseErrorMessage(report) {
+  return `proofroute: Ledger contains ${report.ledger.errorCount} malformed JSONL records; run proofroute privacy --file ${report.path} before sharing.`;
 }
 
 async function watchStats(config, args) {

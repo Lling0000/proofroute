@@ -622,6 +622,7 @@ export function renderShare(report) {
     `${pad('speed lift', 16)} ${MAGENTA}${'█'.repeat(speedWidth)}${DIM}${'░'.repeat(40 - speedWidth)}${RESET} ${summary.averageSpeedup.toFixed(2)}x`,
     ...(policyMix ? [`${pad('policy mix', 16)} ${policyMix}`] : []),
     ...(classifierMix ? [`${pad('classifier mix', 16)} ${classifierMix}`] : []),
+    ...ledgerParseGuardRows(report),
     '',
     `${BOLD}copy line${RESET}`,
     copy
@@ -638,8 +639,9 @@ export function renderShareMarkdown(report) {
   const classifierText = classifierMix ? ` Classifier mix was ${classifierMix}.` : '';
   const swapText = Number(summary.modelSwaps ?? 0) > 0 ? ` Model swaps were ${summary.modelSwaps}/${summary.count}.` : '';
   const providerCallText = report.source === 'ledger' ? '' : ' Provider calls were 0 for this zero-network proof.';
+  const parseGuardText = ledgerParseGuardText(report);
   return [
-    `proofroute routed ${summary.count} prompts ${source}, with ${ms(summary.p95RouterMs)} p95 decision time, ${percent(summary.p95RouterOverheadPct ?? 0)} p95 router overhead, ${money(summary.savingsUsd)} estimated savings, ${summary.averageSpeedup.toFixed(2)}x estimated speedup, and ${accuracy}.${providerCallText}`,
+    `proofroute routed ${summary.count} prompts ${source}, with ${ms(summary.p95RouterMs)} p95 decision time, ${percent(summary.p95RouterOverheadPct ?? 0)} p95 router overhead, ${money(summary.savingsUsd)} estimated savings, ${summary.averageSpeedup.toFixed(2)}x estimated speedup, and ${accuracy}.${providerCallText}${parseGuardText}`,
     '',
     `The proof split ${summary.localRoutes}/${summary.count} routes to local models and ${summary.cloudRoutes}/${summary.count} routes to cloud models, which makes the model menu disappear without hiding the economics. Intent mix was ${compactCounts(summary.intents)}, and model mix was ${compactCounts(summary.models)}.${policyText}${classifierText}${swapText}`,
     '',
@@ -720,6 +722,7 @@ export function renderProofGate(report) {
     '',
     ...providerCallRows,
     ...metricRows,
+    ...ledgerParseGuardRows(report),
     '',
     `${pad('check', 21)} observed     gate`,
     ...rows
@@ -991,12 +994,7 @@ export function renderStats(report) {
   ] : [
     `${pad('cost routed', 16)} ${money(summary.estimatedCostUsd)}`
   ];
-  const ledgerErrors = report.ledger?.errors ?? [];
-  const ledgerGuard = report.ledger?.errorCount > 0 ? [
-    '',
-    `${YELLOW}ledger parse guard${RESET} skipped ${report.ledger.errorCount} malformed JSONL records from ${report.ledger.records} ledger records; run proofroute privacy --file ${report.path} before sharing or proving this ledger.`,
-    ...ledgerErrors.map((error) => `${MAGENTA}jsonl${RESET} ${pad(`line ${error.line}`, 10)} ${error.message}`)
-  ] : [];
+  const ledgerGuard = ledgerParseGuardRows(report);
   return [
     title('routing ledger'),
     `${BOLD}${summary.count} requests${RESET} recorded at ${DIM}${report.path}${RESET}${ledgerScope(report)}${live}.`,
@@ -1349,6 +1347,23 @@ function compactTime(value) {
 function ledgerScope(report) {
   if (!report.window) return '';
   return ` since ${report.window.since} (${report.window.matched}/${report.window.total} ledger events)`;
+}
+
+function ledgerParseGuardRows(report) {
+  const ledger = report.ledger;
+  if (!ledger || Number(ledger.errorCount ?? 0) <= 0) return [];
+  const errors = ledger.errors ?? [];
+  return [
+    '',
+    `${YELLOW}ledger parse guard${RESET} skipped ${ledger.errorCount} malformed JSONL records from ${ledger.records} ledger records; run proofroute privacy --file ${report.path} before sharing or proving this ledger.`,
+    ...errors.map((error) => `${MAGENTA}jsonl${RESET} ${pad(`line ${error.line}`, 10)} ${error.message}`)
+  ];
+}
+
+function ledgerParseGuardText(report) {
+  const ledger = report.ledger;
+  if (!ledger || Number(ledger.errorCount ?? 0) <= 0) return '';
+  return ` Ledger parse guard skipped ${ledger.errorCount} malformed JSONL records from ${ledger.records} ledger records; run proofroute privacy --file ${report.path} before sharing or proving this ledger.`;
 }
 
 function pad(value, width) {

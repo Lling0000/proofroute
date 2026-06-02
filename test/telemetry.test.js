@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { appendFile, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -234,6 +235,124 @@ test('stats command keeps valid proof visible when a ledger line is malformed', 
     assert.match(terminal.stdout, /ledger parse guard/);
     assert.match(terminal.stdout, /line 2/);
     assert.doesNotMatch(terminal.stdout, /secret production prompt|sk-secret/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('prove command blocks malformed ledger without leaking prompt text or credentials', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'proofroute-prove-malformed-ledger-'));
+  const file = join(dir, 'events.jsonl');
+  try {
+    await recordRouteEvent(file, routeEvent({
+      decision: fakeDecision(),
+      status: 200,
+      requestedModel: 'proofroute/local',
+      modelSwap: true,
+      routerDecisionMs: 0.31,
+      endToEndMs: 9,
+      stream: false
+    }));
+    await appendFile(file, '{"prompt":"secret production prompt","apiKey":"sk-secret-production-key"\n', 'utf8');
+    const json = spawnSync(process.execPath, ['./bin/proofroute.js', 'prove', '--file', file, '--min-requests', '1', '--min-savings-usd', '0', '--json'], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      timeout: 1000
+    });
+    assert.equal(json.status, 1, json.stderr);
+    const report = JSON.parse(json.stdout);
+    assert.equal(report.status, 'fail');
+    assert.equal(report.ledger.valid, 1);
+    assert.equal(report.ledger.errorCount, 1);
+    assert.equal(report.ledger.errors[0].line, 2);
+    const parseCheck = report.checks.find((check) => check.id === 'ledger_parse');
+    assert.equal(parseCheck.pass, false);
+    assert.equal(parseCheck.value, 1);
+    assert.doesNotMatch(json.stdout, /secret production prompt|sk-secret-production-key/);
+    const terminal = spawnSync(process.execPath, ['./bin/proofroute.js', 'prove', '--file', file, '--min-requests', '1', '--min-savings-usd', '0'], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      timeout: 1000
+    });
+    const output = `${terminal.stdout}\n${terminal.stderr}`;
+    assert.equal(terminal.status, 1);
+    assert.match(output, /ledger parse guard/);
+    assert.match(output, /line 2/);
+    assert.match(output, /proofroute privacy --file/);
+    assert.match(output, /ledger parse/);
+    assert.doesNotMatch(output, /secret production prompt|sk-secret-production-key/);
+    assert.doesNotMatch(output, /Unexpected token|is not valid JSON|SyntaxError|JSON\.parse/i);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('prove command blocks binary NUL ledger with a sanitized parse guard', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'proofroute-prove-nul-ledger-'));
+  const file = join(dir, 'events.jsonl');
+  try {
+    await appendFile(file, Buffer.concat([
+      Buffer.from([0x00]),
+      Buffer.from('{"prompt":"secret production prompt","apiKey":"sk-secret-production-key"}\n')
+    ]));
+    const terminal = spawnSync(process.execPath, ['./bin/proofroute.js', 'prove', '--file', file, '--min-requests', '1', '--min-savings-usd', '0'], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      timeout: 1000
+    });
+    const output = `${terminal.stdout}\n${terminal.stderr}`;
+    assert.equal(terminal.status, 1);
+    assert.match(output, /ledger parse guard/);
+    assert.match(output, /line 1/);
+    assert.match(output, /proofroute privacy --file/);
+    assert.doesNotMatch(output, /secret production prompt|sk-secret-production-key/);
+    assert.doesNotMatch(output, /Unexpected token|is not valid JSON|SyntaxError|JSON\.parse|\\u0000/i);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('share command refuses malformed ledger artifacts without writing an output file', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'proofroute-share-malformed-ledger-'));
+  const file = join(dir, 'events.jsonl');
+  const svgPath = join(dir, 'proof.svg');
+  try {
+    await appendFile(file, '{"prompt":"secret production prompt","apiKey":"sk-secret-production-key"\n', 'utf8');
+    const result = spawnSync(process.execPath, ['./bin/proofroute.js', 'share', '--svg', '--file', file, '--out', svgPath], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      timeout: 1000
+    });
+    const output = `${result.stdout}\n${result.stderr}`;
+    assert.equal(result.status, 1);
+    assert.equal(result.stdout, '');
+    assert.match(output, /Ledger contains 1 malformed JSONL records/);
+    assert.match(output, /proofroute privacy --file/);
+    assert.doesNotMatch(output, /secret production prompt|sk-secret-production-key/);
+    assert.equal(existsSync(svgPath), false);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('tune command refuses malformed ledger without writing an export file', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'proofroute-tune-malformed-ledger-'));
+  const file = join(dir, 'events.jsonl');
+  const exportPath = join(dir, 'router.patch.json');
+  try {
+    await appendFile(file, '{"prompt":"secret production prompt","apiKey":"sk-secret-production-key"\n', 'utf8');
+    const result = spawnSync(process.execPath, ['./bin/proofroute.js', 'tune', '--file', file, '--export', exportPath], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      timeout: 1000
+    });
+    const output = `${result.stdout}\n${result.stderr}`;
+    assert.equal(result.status, 1);
+    assert.equal(result.stdout, '');
+    assert.match(output, /Ledger contains 1 malformed JSONL records/);
+    assert.match(output, /proofroute privacy --file/);
+    assert.doesNotMatch(output, /secret production prompt|sk-secret-production-key/);
+    assert.equal(existsSync(exportPath), false);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
