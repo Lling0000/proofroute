@@ -38,13 +38,12 @@ async function runRuntimeSmokeTest({ prompt, policy }) {
     return {
       status: ok ? 'pass' : 'fail',
       mode: 'runtime',
-      prompt,
       decision,
       routerDecisionMs,
       executionMs,
       upstream: {
         url: upstream.url,
-        requests: upstream.requests
+        requests: promptFreeUpstreamRequests(upstream.requests)
       },
       response: {
         status: upstreamResponse.status,
@@ -109,7 +108,6 @@ async function runProxySmokeTest({ prompt, policy }) {
     return {
       status: ok ? 'pass' : 'fail',
       mode: 'proxy',
-      prompt,
       decision,
       routerDecisionMs,
       executionMs,
@@ -124,7 +122,7 @@ async function runProxySmokeTest({ prompt, policy }) {
       },
       upstream: {
         url: upstream.url,
-        requests: upstream.requests
+        requests: promptFreeUpstreamRequests(upstream.requests)
       },
       response: {
         status: response.status,

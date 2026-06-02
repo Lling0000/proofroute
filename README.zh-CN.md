@@ -29,9 +29,11 @@ ProofRoute 的架构遵循 Agent-View-Controller。Controller 负责本地意图
 
 ## 快速开始
 
-安装或链接包之后，开发者应该记住的命令是 `proofroute demo`。在克隆仓库里，如果本机有 npm，`npm run demo` 指向同一个零网络 proof；在 `node ./bin/proofroute.js publish --check-public --check-actions` 证明 npm 公网可见性和匿名 GitHub 可见性之前，最诚实的复制运行路径仍然是从这个仓库直接执行 Node 命令，而第二条证明路径是单 prompt 的 Markdown trace receipt，它会展示选中模型为什么击败 runner-up，同时不打印原始 prompt。
+fresh-clone 路径刻意保持朴素，因为 ProofRoute 应该先证明价值，再要求安装仪式。在 `node ./bin/proofroute.js publish --check-public --check-actions` 证明 npm 公网可见性和匿名 GitHub 可见性之前，最诚实的复制运行路径仍然是从这个仓库直接执行 Node 命令；安装或链接包之后，开发者应该记住的命令才是 `proofroute demo`。第二条证明路径是单 prompt 的 Markdown trace receipt，它会展示选中模型为什么击败 runner-up，同时不打印原始 prompt。
 
 ```sh
+git clone https://github.com/Lling0000/proofroute.git
+cd proofroute
 node ./bin/proofroute.js demo
 node ./bin/proofroute.js route --trace --markdown --prompt "Refactor this webhook, explain the bug, and write a regression test."
 ```
@@ -126,6 +128,8 @@ node --test
 ```
 
 维护者侧仓库文案在 [docs/repository-profile.md](docs/repository-profile.md)，同一公共表面可以通过 `node ./bin/proofroute.js profile` 或 `npm run profile` 打印，`npm run release:npm:dry-run` 则用于在不发布的情况下预览 npm tarball。发布状态必须保持诚实：在 `node ./bin/proofroute.js profile --check-public` 证明公网门面、并且 `node ./bin/proofroute.js publish --check-public --check-actions` 证明最终安装文案门禁之前，以本地 checkout 的直接 Node 命令为准。release 侧入口是 `node ./bin/proofroute.js launch` 或 `npm run launch`，它会把仓库门面、零网络 proof、proxy smoke、proxy matrix、隐私审计、share asset 检查和 classifier evidence 状态合并成一张 readiness card。需要把真实公网状态纳入门控时，`node ./bin/proofroute.js launch --check-public` 和 `node ./bin/proofroute.js release --preflight --core --check-public` 会检查公开 GitHub 与 npm 可见性，而不会默认修改远端或写出 proof pack。维护者可以先运行 `node ./bin/proofroute.js publish --local-only` 或 `npm run publish:local`，只证明本地 source tree、package surface、npm CLI、npm pack dry-run 和 npm publish dry-run，不触碰 npm 登录、GitHub、匿名公网可见性或 Actions。这个本地预检通过是有价值的发布证据，但不是最终公网安装文案门禁。最后一层发布门禁仍然是 `node ./bin/proofroute.js publish --check-public --check-actions` 或 `npm run publish:preflight`，它会同时检查 package metadata、可解析的 git HEAD、干净的 source tree、npm CLI、npm pack dry-run 内容、npm publish dry-run 是否会被自动修正、npm registry 登录态、公开 GitHub 与 npm 可见性，以及当前本地 HEAD 对应的 GitHub Actions 证据，并输出机器可读的 `blockers`、`nextActions`、`npm.evidence` 和 `summary.localEvidence`。这让干净的 checkout、干净的 npm CLI、干净的 tarball 表面和干净的 publish dry-run 能在 npm 登录、公开 npm 可见性、GitHub 账号可见性或账号层 Actions 仍需外部处理时继续保持可见。遇到账号层平台限制时，`npm run publish:support-note` 会生成可复制、脱敏、纯文本的支持说明，`npm run publish:support-pack` 会生成包含紧凑 `status.json` 的可归档脱敏附件目录，但它们都不会绕过任何 blocker，也不会把外部账号限制伪装成代码发布成功。
+
+可分享的 core archive 是 `node ./bin/proofroute.js release --core --out proofroute-release-pack`、`npm run release:core`，或者刻意保留为默认语义的 `npm run release:pack`。它会把仓库 metadata、launch readiness JSON、git provenance、段落式 release prose、prompt-free launch copy、SVG proof assets 和显式无加速器宣称的 classifier 状态写进同一个目录，方便 release notes、PR 和 launch posts 使用。带 authenticated GitHub drift check 的 maintainer archive 是 `npm run release:pack:github`，这样普通笔记本第一证据包和远端仓库门禁不会混在一起。提供 classifier evidence 时，pack 会先消费 verifier output，验证通过后才复制原始 evidence 文件；这样失败 evidence 仍然对调试有用，但不会把 raw submitted bundle 保存在公开 archive 里。严格硬件 release 路径必须先有通过 hardware probe gate 的新鲜 classifier evidence，才允许公开加速器宣称。
 
 ProofRoute 想成为开源基础设施里的一个高传播心跳。它最强的 demo 不是幻灯片，也不是落地页，而是一张终端截图：真实 prompt 在毫秒级被路由，本地模型在该赢的时候赢，高质量模型在值得时赢，精确节省金额和工程决策出现在同一个画面里。
 

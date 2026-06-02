@@ -36,6 +36,7 @@ test('repository profile keeps public metadata executable and shareable', async 
   assert.equal(report.commands.coreLaunch, 'node ./bin/proofroute.js launch --core');
   assert.equal(report.commands.publicLaunch, 'node ./bin/proofroute.js launch --check-public');
   assert.equal(report.commands.coreReleasePack, 'node ./bin/proofroute.js release --core --out proofroute-release-pack');
+  assert.equal(report.commands.githubReleasePack, 'node ./bin/proofroute.js release --out proofroute-release-pack --check-github');
   assert.equal(report.commands.artifactReleasePack, 'node ./bin/proofroute.js release --core --require-artifact-evidence --artifact-evidence classifier-linear-evidence.json --max-evidence-age-hours 24 --out proofroute-release-pack');
   assert.equal(report.commands.releaseStrictPreflight, 'node ./bin/proofroute.js release --preflight --check-public --require-evidence --evidence classifier-evidence.json --max-evidence-age-hours 24');
   assert.equal(report.commands.publicReleasePreflight, 'node ./bin/proofroute.js release --preflight --core --check-public');
@@ -63,6 +64,7 @@ test('repository profile keeps public metadata executable and shareable', async 
   assert.match(output, /public preflight/);
   assert.match(output, /npm dry run/);
   assert.match(output, /core launch/);
+  assert.match(output, /github pack/);
   assert.match(output, /launch ready/);
   assert.match(output, /proof gate/);
   assert.match(output, /ledger repair/);
@@ -96,6 +98,17 @@ test('npm keyword front matter keeps high-intent discovery tags near the top', a
   assert.ok(Math.max(...indexes) < 16);
 });
 
+test('release npm scripts keep the unqualified pack aligned with core proof semantics', async () => {
+  const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+  const report = await repositoryProfileReport();
+  assert.equal(pkg.scripts['release:core'], report.commands.coreReleasePack);
+  assert.equal(pkg.scripts['release:pack'], pkg.scripts['release:core']);
+  assert.equal(pkg.scripts['release:pack:github'], report.commands.githubReleasePack);
+  assert.match(pkg.scripts['release:strict'], /--require-evidence/);
+  assert.match(pkg.scripts['release:strict'], /--check-public/);
+  assert.match(pkg.scripts['release:strict'], /--check-github/);
+});
+
 test('profile command emits machine-readable repository face metadata', () => {
   const result = spawnSync(process.execPath, ['./bin/proofroute.js', 'profile', '--json'], {
     cwd: new URL('..', import.meta.url),
@@ -115,6 +128,7 @@ test('profile command emits machine-readable repository face metadata', () => {
   assert.equal(report.commands.coreLaunch, 'node ./bin/proofroute.js launch --core');
   assert.equal(report.commands.publicLaunch, 'node ./bin/proofroute.js launch --check-public');
   assert.equal(report.commands.coreReleasePack, 'node ./bin/proofroute.js release --core --out proofroute-release-pack');
+  assert.equal(report.commands.githubReleasePack, 'node ./bin/proofroute.js release --out proofroute-release-pack --check-github');
   assert.equal(report.commands.artifactReleasePack, 'node ./bin/proofroute.js release --core --require-artifact-evidence --artifact-evidence classifier-linear-evidence.json --max-evidence-age-hours 24 --out proofroute-release-pack');
   assert.equal(report.commands.releaseStrictPreflight, 'node ./bin/proofroute.js release --preflight --check-public --require-evidence --evidence classifier-evidence.json --max-evidence-age-hours 24');
   assert.equal(report.commands.publicReleasePreflight, 'node ./bin/proofroute.js release --preflight --core --check-public');

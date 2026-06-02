@@ -235,7 +235,6 @@ export class AgentRuntime {
       const classifierFeatures = decision.intent.features ?? {};
       routes.push({
         id: sample.id,
-        prompt: sample.prompt,
         expectedIntent: sample.intent,
         actualIntent: decision.intent.name,
         matched: sample.intent ? sample.intent === decision.intent.name : undefined,

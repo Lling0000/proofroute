@@ -9,7 +9,8 @@ test('smoke test proves local OpenAI-compatible execution loop', async () => {
   assert.equal(report.response.status, 200);
   assert.equal(report.upstream.requests.length, 1);
   assert.equal(report.upstream.requests[0].model, report.decision.model.id);
-  assert.equal(report.upstream.requests[0].authorization, 'Bearer smoke-key');
+  assert.equal(report.upstream.requests[0].authorizationPresent, true);
+  assert.equal(report.upstream.requests[0].authorization, undefined);
   assert.match(report.response.content, /smoke ok/);
   assert.ok(report.routerDecisionMs > 0);
   assert.ok(report.executionMs > 0);
@@ -18,6 +19,7 @@ test('smoke test proves local OpenAI-compatible execution loop', async () => {
   assert.match(output, /PROXY SMOKE/);
   assert.match(output, /PASS/);
   assert.match(output, /auth header/);
+  assert.doesNotMatch(JSON.stringify(report), /Refactor this webhook|Bearer smoke-key/);
   assert.match(renderHelp(), /proofroute smoke/);
 });
 
@@ -28,7 +30,8 @@ test('smoke test can prove the full transparent proxy entrypoint', async () => {
   assert.equal(report.response.status, 200);
   assert.equal(report.upstream.requests.length, 1);
   assert.equal(report.upstream.requests[0].model, report.decision.model.id);
-  assert.equal(report.upstream.requests[0].authorization, 'Bearer smoke-key');
+  assert.equal(report.upstream.requests[0].authorizationPresent, true);
+  assert.equal(report.upstream.requests[0].authorization, undefined);
   assert.equal(report.response.headers.model, report.decision.model.id);
   assert.equal(report.response.headers.requestedModel, 'smoke-premium');
   assert.equal(report.response.headers.modelSwap, 'true');
@@ -86,6 +89,7 @@ test('smoke test can prove the full transparent proxy entrypoint', async () => {
   assert.match(output, /proxy cache/);
   assert.match(output, /classifier/);
   assert.match(output, /actual tokens/);
+  assert.doesNotMatch(JSON.stringify(report), /Refactor this webhook|Bearer smoke-key|smoke-client/);
   assert.match(renderHelp(), /proofroute smoke --proxy/);
 });
 

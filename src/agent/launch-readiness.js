@@ -38,7 +38,7 @@ const repositoryFaceAnchorTopics = Object.freeze([
   'coding-agent',
   'gpu-classifier',
   'tensorrt',
-  'terminal-ui',
+  'openai-proxy',
   'cost-optimization',
   'vibe-coding'
 ]);

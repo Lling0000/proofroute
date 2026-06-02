@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { AgentRuntime } from '../src/agent/runtime.js';
 import { demoCatalog } from '../src/config.js';
 import { RouteController } from '../src/controller/route-controller.js';
@@ -130,4 +131,16 @@ test('launch demo renders a zero-network proof card', async () => {
   assert.match(renderHelp(), /proofroute share --svg/);
   assert.match(renderHelp(), /proofroute stats --watch/);
   assert.match(renderHelp(), /proofroute prove/);
+});
+
+test('demo JSON stays prompt-free for shareable launch evidence', () => {
+  const result = spawnSync(process.execPath, ['./bin/proofroute.js', 'demo', '--json'], {
+    cwd: new URL('..', import.meta.url),
+    encoding: 'utf8'
+  });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.aggregate.providerCalls, 0);
+  assert.ok(report.routes.every((route) => route.prompt === undefined));
+  assert.doesNotMatch(result.stdout, /Refactor this TypeScript|Extract customer ids|Rewrite this README|Audit this repository|routing algorithms/);
 });

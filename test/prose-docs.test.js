@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -72,3 +72,30 @@ test('prose docs checker allows table-looking text inside code fences', async ()
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test('prose docs npm script scans every public documentation surface', async () => {
+  const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+  const script = pkg.scripts['check:prose'];
+  for (const target of [
+    'README.md',
+    'README.zh-CN.md',
+    'docs',
+    'CONTRIBUTING.md',
+    'SECURITY.md',
+    '.github/PULL_REQUEST_TEMPLATE.md',
+    '.github/ISSUE_TEMPLATE',
+    'src',
+    'bin',
+    'examples',
+    'test',
+    'package.json',
+    'LICENSE',
+    '.env.example'
+  ]) {
+    assert.match(script, new RegExp(`(^| )${escapeRegExp(target)}($| )`));
+  }
+});
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}

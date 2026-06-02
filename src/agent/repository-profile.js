@@ -23,7 +23,7 @@ const githubTopics = [
   'llm-gateway',
   'gpu-classifier',
   'tensorrt',
-  'terminal-ui'
+  'openai-proxy'
 ];
 
 const readmeBadges = Object.freeze([
@@ -81,6 +81,7 @@ const commands = {
   launchReadiness: 'node ./bin/proofroute.js launch',
   launchEvidenceGate: 'node ./bin/proofroute.js launch --require-evidence --evidence classifier-evidence.json --max-evidence-age-hours 24',
   coreReleasePack: 'node ./bin/proofroute.js release --core --out proofroute-release-pack',
+  githubReleasePack: 'node ./bin/proofroute.js release --out proofroute-release-pack --check-github',
   artifactReleasePack: 'node ./bin/proofroute.js release --core --require-artifact-evidence --artifact-evidence classifier-linear-evidence.json --max-evidence-age-hours 24 --out proofroute-release-pack',
   releaseStrictPreflight: 'node ./bin/proofroute.js release --preflight --check-public --require-evidence --evidence classifier-evidence.json --max-evidence-age-hours 24',
   publicReleasePreflight: 'node ./bin/proofroute.js release --preflight --core --check-public',

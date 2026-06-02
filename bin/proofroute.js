@@ -19,14 +19,19 @@ import { exportTunedConfig, tuneFromEvents } from '../src/agent/tuner.js';
 import { demoCatalog, mergeConfig, readConfig } from '../src/config.js';
 import { ExternalClassifier } from '../src/controller/gpu-classifier.js';
 import { RouteController } from '../src/controller/route-controller.js';
-import { renderAgentExecution, renderAgentPlan, renderCalibration, renderClassifierBenchmark, renderClassifierEvidenceVerification, renderClassifierMetrics, renderClassifierSvg, renderConnect, renderConnectShell, renderDecision, renderDashboard, renderDoctor, renderGithubRepositoryState, renderHelp, renderIntentTraining, renderJson, renderLaunchDemo, renderLaunchReadiness, renderModelCatalog, renderPrivacy, renderPrivacyRepair, renderProofGate, renderPublicRepositoryFace, renderPublishReadiness, renderPublishSupportNote, renderReleasePreflight, renderReleaseProofPack, renderRepositoryProfile, renderRouteMarkdown, renderRouteTrace, renderShare, renderShareMarkdown, renderShareSvg, renderSmoke, renderStats, renderTune } from '../src/view/terminal.js';
+import { renderAgentExecution, renderAgentPlan, renderCalibration, renderClassifierBenchmark, renderClassifierEvidenceVerification, renderClassifierMetrics, renderClassifierSvg, renderConnect, renderConnectShell, renderDecision, renderDashboard, renderDoctor, renderGithubRepositoryState, renderCommandHelp, renderHelp, renderIntentTraining, renderJson, renderLaunchDemo, renderLaunchReadiness, renderModelCatalog, renderPrivacy, renderPrivacyRepair, renderProofGate, renderPublicRepositoryFace, renderPublishReadiness, renderPublishSupportNote, renderReleasePreflight, renderReleaseProofPack, renderRepositoryProfile, renderRouteMarkdown, renderRouteTrace, renderShare, renderShareMarkdown, renderShareSvg, renderSmoke, renderStats, renderTune } from '../src/view/terminal.js';
 
 const command = process.argv[2] ?? 'help';
-const args = parseArgs(process.argv.slice(3));
+const commandArgv = process.argv.slice(3);
+const args = parseArgs(commandArgv);
 
 try {
-  if (command === 'help' || command === '--help' || command === '-h') {
-    console.log(renderHelp());
+  if (command === 'version' || command === '--version' || command === '-v') {
+    console.log(await packageVersion());
+  } else if (command === 'help' || command === '--help' || command === '-h') {
+    console.log(commandArgv[0] && !commandArgv[0].startsWith('-') ? renderCommandHelp(commandArgv[0]) : renderHelp());
+  } else if (wantsHelp(args, commandArgv)) {
+    console.log(renderCommandHelp(command));
   } else if (command === 'route') {
     const config = await loadRuntimeConfig(args);
     const prompt = await readPrompt(args);
@@ -372,6 +377,15 @@ try {
 } catch (error) {
   console.error(formatError(error));
   process.exitCode = 1;
+}
+
+async function packageVersion() {
+  const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+  return pkg.version;
+}
+
+function wantsHelp(args, argv) {
+  return Boolean(args.help || args.h || argv.includes('-h'));
 }
 
 async function loadRuntimeConfig(args) {

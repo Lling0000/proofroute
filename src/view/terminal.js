@@ -129,6 +129,241 @@ export function renderHelp() {
   ].join('\n');
 }
 
+export function renderCommandHelp(command) {
+  const canonical = commandAliases[String(command ?? '').toLowerCase()] ?? String(command ?? '').toLowerCase();
+  const entry = commandHelp[canonical];
+  if (!entry) return renderHelp();
+  return [
+    `${BOLD}proofroute ${canonical}${RESET} ${DIM}${entry.summary}${RESET}`,
+    '',
+    `${BOLD}Usage${RESET}`,
+    ...entry.usage.map((line) => `  ${line}`),
+    '',
+    `${BOLD}Proof boundary${RESET}`,
+    `  ${entry.boundary}`,
+    `  This help output is read-only and never runs ${canonical}.`
+  ].join('\n');
+}
+
+const commandAliases = {
+  repo: 'profile',
+  readiness: 'launch',
+  pack: 'release',
+  audit: 'privacy',
+  accelerator: 'classifier',
+  catalog: 'models'
+};
+
+const commandHelp = {
+  route: {
+    summary: 'Classify one prompt and print the selected model with cost, speed, and trace evidence.',
+    usage: [
+      'proofroute route --prompt "fix this flaky test"',
+      'proofroute route --trace --markdown --prompt "why this model?"',
+      'proofroute route --max-cost-usd 0.001 --prompt "keep this cheap"'
+    ],
+    boundary: 'Routes locally before execution and does not call a provider.'
+  },
+  demo: {
+    summary: 'Render a zero-network proof card with savings, speedup, p95 latency, and route mix.',
+    usage: [
+      'proofroute demo',
+      'proofroute demo --json'
+    ],
+    boundary: 'Uses synthetic local routing evidence and makes zero network provider calls.'
+  },
+  share: {
+    summary: 'Render copy-ready routing proof for terminal screenshots, Markdown posts, or SVG cards.',
+    usage: [
+      'proofroute share',
+      'proofroute share --markdown',
+      'proofroute share --svg --out docs/proofroute-terminal.svg',
+      'proofroute share --ledger --since 1h --markdown'
+    ],
+    boundary: 'Default share is zero-network; ledger share reads routing evidence without printing prompt text.'
+  },
+  prove: {
+    summary: 'Fail CI when launch proof or ledger proof misses explicit routing value gates.',
+    usage: [
+      'proofroute prove --max-p95-ms 5 --min-accuracy 0.8',
+      'proofroute prove --ledger --min-requests 20 --max-p95-ms 5 --max-router-overhead-pct 1'
+    ],
+    boundary: 'Evaluates thresholds against local proof or prompt-free ledger aggregates.'
+  },
+  connect: {
+    summary: 'Print the drop-in OpenAI-compatible base URL, environment exports, and smoke commands.',
+    usage: [
+      'proofroute connect --port 8787',
+      'proofroute connect --local-openai http://127.0.0.1:1234/v1 --local-openai-model qwen3',
+      'proofroute connect --shell sh'
+    ],
+    boundary: 'Prints setup instructions and does not start the proxy.'
+  },
+  models: {
+    summary: 'Render the configured catalog as an executable model map.',
+    usage: [
+      'proofroute models',
+      'proofroute models --json'
+    ],
+    boundary: 'Reads configuration and environment-derived local model entries without executing providers.'
+  },
+  profile: {
+    summary: 'Print repository About copy, topics, badges, npm metadata, launch pitch, and proof commands.',
+    usage: [
+      'proofroute profile',
+      'proofroute profile --json',
+      'proofroute profile --check-public',
+      'proofroute profile --check-github',
+      'proofroute profile --sync-github'
+    ],
+    boundary: 'Plain profile is local; public and GitHub checks are explicit, while sync mutates GitHub metadata only when requested.'
+  },
+  launch: {
+    summary: 'Run launch readiness across repository face, demo proof, proxy smoke, privacy, assets, and classifier evidence.',
+    usage: [
+      'proofroute launch',
+      'proofroute launch --core',
+      'proofroute launch --check-public',
+      'proofroute launch --require-artifact-evidence --artifact-evidence classifier-linear-evidence.json --max-evidence-age-hours 24'
+    ],
+    boundary: 'Launch proof uses local evidence by default and checks public visibility only when asked.'
+  },
+  release: {
+    summary: 'Write or preflight a prompt-free release proof pack.',
+    usage: [
+      'proofroute release --preflight --core',
+      'proofroute release --core --out proofroute-release-pack',
+      'proofroute release --out proofroute-release-pack --check-github',
+      'proofroute release --preflight --check-public --require-evidence --evidence classifier-evidence.json --max-evidence-age-hours 24'
+    ],
+    boundary: 'Preflight does not write a pack; pack creation writes only prompt-free release evidence.'
+  },
+  publish: {
+    summary: 'Check package, npm, public face, GitHub Actions evidence, and redacted support artifacts.',
+    usage: [
+      'proofroute publish --local-only',
+      'proofroute publish --check-public --check-actions',
+      'proofroute publish --check-public --check-actions --probe-actions-dispatch --support-note',
+      'proofroute publish --check-public --check-actions --probe-actions-dispatch --support-pack proofroute-publish-support-pack'
+    ],
+    boundary: 'Local-only skips external gates; full install-copy readiness requires check-public and check-actions together.'
+  },
+  smoke: {
+    summary: 'Run a local fake-provider execution loop through runtime, proxy, or proxy matrix.',
+    usage: [
+      'proofroute smoke',
+      'proofroute smoke --proxy',
+      'proofroute smoke --proxy --matrix'
+    ],
+    boundary: 'Uses local fake providers and should not require cloud credentials.'
+  },
+  bench: {
+    summary: 'Run a zero-network benchmark that makes routing value visible immediately.',
+    usage: [
+      'proofroute bench --prompt "refactor this webhook" --runs 9',
+      'proofroute bench --json'
+    ],
+    boundary: 'Benchmarks Controller decisions without provider calls.'
+  },
+  calibrate: {
+    summary: 'Run a local prompt suite and show intent accuracy, savings, and p95 routing latency.',
+    usage: [
+      'proofroute calibrate --file examples/samples.json',
+      'proofroute calibrate --file examples/samples.json --json --out calibration.json'
+    ],
+    boundary: 'Reads labeled local samples and does not call providers.'
+  },
+  learn: {
+    summary: 'Train a local intent artifact from labeled samples and optionally export ONNX.',
+    usage: [
+      'proofroute learn --samples examples/samples.json --out examples/linear-intent-model.trained.json',
+      'proofroute learn --samples examples/samples.json --out examples/linear-intent-model.trained.json --onnx-out examples/linear-intent-model.trained.onnx'
+    ],
+    boundary: 'Writes only the requested local artifact paths.'
+  },
+  plan: {
+    summary: 'Split one complex request into an asynchronous multi-agent routing plan.',
+    usage: [
+      'proofroute plan --prompt "ship this feature and review the risk"'
+    ],
+    boundary: 'Plans locally and does not execute providers.'
+  },
+  fanout: {
+    summary: 'Execute the asynchronous multi-agent plan through configured providers.',
+    usage: [
+      'proofroute fanout --prompt "ship this feature and review the risk"'
+    ],
+    boundary: 'Can execute configured providers and should be used after catalog readiness is understood.'
+  },
+  stats: {
+    summary: 'Render or live-watch local privacy-preserving routing telemetry as terminal proof.',
+    usage: [
+      'proofroute stats',
+      'proofroute stats --since 1h',
+      'proofroute stats --watch --since 1h'
+    ],
+    boundary: 'Reads the local prompt-free ledger.'
+  },
+  privacy: {
+    summary: 'Audit the local telemetry ledger for prompt, completion, request, response, or credential fields.',
+    usage: [
+      'proofroute privacy',
+      'proofroute privacy --file .proofroute/events.jsonl --json'
+    ],
+    boundary: 'Reads local ledger files and reports forbidden fields without repairing them.'
+  },
+  repair: {
+    summary: 'Write a prompt-free repaired ledger artifact while dropping malformed or unsafe records.',
+    usage: [
+      'proofroute repair --file .proofroute/events.jsonl --out .proofroute/events.repaired.jsonl'
+    ],
+    boundary: 'Writes a separate repaired artifact and refuses in-place mutation unless force is explicit.'
+  },
+  classifier: {
+    summary: 'Render classifier sidecar metrics or run local classifier benchmark proof.',
+    usage: [
+      'proofroute classifier',
+      'proofroute classifier --warmup',
+      'proofroute classifier --bench --warmup --runs 5',
+      'proofroute classifier --verify-evidence classifier-evidence.json --require-device-profiles'
+    ],
+    boundary: 'Metrics read or benchmark the local classifier path; strict hardware claims need explicit evidence verification.'
+  },
+  doctor: {
+    summary: 'Check local runtime, providers, telemetry, classifier, and policy readiness.',
+    usage: [
+      'proofroute doctor',
+      'proofroute doctor --strict-hardware',
+      'proofroute doctor --require-warmup --min-classifier-devices 2 --min-classifier-lanes 2'
+    ],
+    boundary: 'Doctor can create the telemetry directory during real checks, but help is read-only.'
+  },
+  tune: {
+    summary: 'Recommend a routing policy patch from the local telemetry ledger.',
+    usage: [
+      'proofroute tune',
+      'proofroute tune --since 1h --export tuned-router.json'
+    ],
+    boundary: 'Reads prompt-free routing telemetry and writes only when export is passed.'
+  },
+  proxy: {
+    summary: 'Start an OpenAI-compatible transparent proxy for chat, completions, and responses.',
+    usage: [
+      'proofroute proxy --port 8787 --config router.json',
+      'proofroute proxy --require-classifier-warmup --port 8787 --config router.json'
+    ],
+    boundary: 'Starts a local server and forwards configured provider calls.'
+  },
+  init: {
+    summary: 'Print the default or local OpenAI-compatible model catalog as editable JSON.',
+    usage: [
+      'proofroute init > router.json',
+      'proofroute init --preset local-openai > router.json'
+    ],
+    boundary: 'Prints JSON to stdout and writes only through shell redirection chosen by the user.'
+  }
+};
+
 export function renderRepositoryProfile(report) {
   return [
     title('repository face'),
@@ -157,6 +392,7 @@ export function renderRepositoryProfile(report) {
     `${pad('core launch', 16)} ${report.commands.coreLaunch}`,
     `${pad('public launch', 16)} ${report.commands.publicLaunch}`,
     `${pad('core pack', 16)} ${report.commands.coreReleasePack}`,
+    `${pad('github pack', 16)} ${report.commands.githubReleasePack}`,
     `${pad('artifact pack', 16)} ${report.commands.artifactReleasePack}`,
     `${pad('strict preflight', 16)} ${report.commands.releaseStrictPreflight}`,
     `${pad('public preflight', 16)} ${report.commands.publicReleasePreflight}`,
@@ -876,7 +1112,7 @@ export function renderSmoke(report) {
     `${pad('savings', 16)} ${money(report.decision.economics.savingsUsd)}`,
     `${pad('speedup', 16)} ${report.decision.performance.speedup.toFixed(2)}x`,
     `${pad('upstream', 16)} ${report.upstream.url}`,
-    `${pad('auth header', 16)} ${request.authorization ? 'present' : 'missing'}`,
+    `${pad('auth header', 16)} ${request.authorizationPresent ? 'present' : 'missing'}`,
     `${pad('response', 16)} ${report.response.content}`
   ];
   if (report.proxy) rows.splice(5, 0, `${pad('proxy', 16)} ${report.proxy.origin}`);
