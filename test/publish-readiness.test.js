@@ -35,6 +35,7 @@ test('publish readiness passes when package, npm, auth, and Actions evidence are
   assert.match(output, /local evidence/);
   assert.match(output, /npm publish dry-run/);
   assert.match(output, /GitHub Actions/);
+  assert.doesNotMatch(output, /--support-pack proofroute-publish-support-pack/);
 });
 
 test('publish readiness fails when npm auth and CI evidence are missing', async () => {
@@ -51,6 +52,10 @@ test('publish readiness fails when npm auth and CI evidence are missing', async 
   assert.equal(report.summary.remainingBlockerScope, 'external_or_operator');
   assert.deepEqual(report.nextActions.map((action) => action.forBlocker), ['npm_auth_missing', 'github_actions_not_passing']);
   assert.match(report.npm.auth.detail, /auth is missing/);
+  const output = renderPublishReadiness(report);
+  assert.match(output, /support pack/);
+  assert.match(output, /--support-pack proofroute-publish-support-pack/);
+  assert.match(output, /status fails until blockers clear/);
   assert.doesNotMatch(JSON.stringify(report), /NODE_AUTH_TOKEN|secret-token/);
 });
 
@@ -300,6 +305,9 @@ if (args[0] === '--version') {
     assert.equal(packStatus.readyToPublish, false);
     assert.equal(packStatus.localEvidence, 'pass');
     assert.deepEqual(packStatus.operatorBlockerIds, ['npm_auth_missing']);
+    const renderedPack = renderPublishReadiness(packReport);
+    assert.match(renderedPack, /support pack/);
+    assert.doesNotMatch(renderedPack, /--support-pack proofroute-publish-support-pack/);
     const packNote = await readFile(join(packDir, 'publish-support-note.txt'), 'utf8');
     assert.match(packNote, /ProofRoute publish support note/);
     assert.match(packNote, /\nBlockers\n/);

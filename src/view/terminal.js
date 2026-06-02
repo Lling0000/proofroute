@@ -278,6 +278,7 @@ export function renderPublishReadiness(report) {
   const npmEvidence = renderNpmPublishEvidence(report.npm?.evidence);
   const localEvidence = renderPublishLocalEvidence(report.summary);
   const supportPack = report.supportPack ? publishSupportPackDisplay(report.supportPack) : undefined;
+  const supportRows = publishSupportRows(report, supportPack);
   const blockers = (report.blockers ?? []).map((blocker) => `${MAGENTA}${blocker.id}${RESET} ${DIM}${compactText(blocker.nextAction, 112)}${RESET}`);
   return [
     title('publish readiness'),
@@ -290,7 +291,7 @@ export function renderPublishReadiness(report) {
     `${pad('account', 16)} ${account}`,
     `${pad('public face', 16)} ${publicFace}`,
     `${pad('actions', 16)} ${actions}`,
-    ...(supportPack ? [`${pad('support pack', 16)} ${supportPack}`] : []),
+    ...supportRows,
     '',
     ...rows,
     ...(blockers.length > 0 ? ['', `${BOLD}next actions${RESET}`, ...blockers] : [])
@@ -343,6 +344,17 @@ function publishSupportPackDisplay(pack) {
   const scope = summary?.remainingBlockerScope ?? 'unknown';
   const blockers = Array.isArray(summary?.blockerIds) ? summary.blockerIds.length : pack.blockerIds?.length ?? 0;
   return compactText(`${pack.status ?? 'unknown'} ${pack.outDir ?? 'proofroute-publish-support-pack'} files ${(pack.files ?? []).length}, status.json local ${local}, scope ${scope}, blockers ${blockers}`, 132);
+}
+
+function publishSupportRows(report, supportPack) {
+  if (supportPack) return [`${pad('support pack', 16)} ${supportPack}`];
+  if ((report.blockers ?? []).length === 0) return [];
+  const count = report.blockers.length === 1 ? '1 blocker' : `${report.blockers.length} blockers`;
+  const scope = report.summary?.remainingBlockerScope ?? 'unknown';
+  return [
+    `${pad('support pack', 16)} ${compactText(`not attached; status fails until blockers clear; ${count}, scope ${scope}`, 132)}`,
+    `${pad('pack command', 16)} node ./bin/proofroute.js publish --check-public --check-actions --probe-actions-dispatch --support-pack proofroute-publish-support-pack`
+  ];
 }
 
 function renderPublishLocalEvidence(summary) {
@@ -595,11 +607,13 @@ export function renderShare(report) {
   const copy = shareCopyLine(summary, report);
   const policyMix = compactCounts(summary.policies ?? {});
   const classifierMix = compactCounts(summary.classifierBackends ?? {});
+  const providerCallProof = ledger ? undefined : '0 provider calls before routing proof';
   return [
     title('shareable proof'),
     `${BOLD}${ledger ? 'LOCAL TELEMETRY ROUTING RECEIPT' : 'ZERO-NETWORK ROUTING RECEIPT'}${RESET} ${DIM}${scope}.${RESET}`,
     `${GREEN}${money(summary.savingsUsd)} saved${RESET}, ${MAGENTA}${summary.averageSpeedup.toFixed(2)}x${RESET} estimated speedup, ${YELLOW}${ms(summary.p95RouterMs)}${RESET} p95 decision, ${YELLOW}${percent(summary.p95RouterOverheadPct ?? 0)}${RESET} router overhead, ${CYAN}${accuracy}${RESET}.`,
     '',
+    ...(providerCallProof ? [`${pad('provider calls', 16)} ${providerCallProof}`] : []),
     `${pad('local routes', 16)} ${bar(localRatio, 40)} ${summary.localRoutes}/${summary.count}`,
     `${pad('cloud routes', 16)} ${bar(cloudRatio, 40)} ${summary.cloudRoutes}/${summary.count}`,
     ...(swapCount > 0 ? [`${pad('model swaps', 16)} ${bar(swapRatio, 40)} ${swapCount}/${summary.count}`] : []),
@@ -622,8 +636,9 @@ export function renderShareMarkdown(report) {
   const classifierMix = compactCounts(summary.classifierBackends ?? {});
   const classifierText = classifierMix ? ` Classifier mix was ${classifierMix}.` : '';
   const swapText = Number(summary.modelSwaps ?? 0) > 0 ? ` Model swaps were ${summary.modelSwaps}/${summary.count}.` : '';
+  const providerCallText = report.source === 'ledger' ? '' : ' Provider calls were 0 for this zero-network proof.';
   return [
-    `proofroute routed ${summary.count} prompts ${source}, with ${ms(summary.p95RouterMs)} p95 decision time, ${percent(summary.p95RouterOverheadPct ?? 0)} p95 router overhead, ${money(summary.savingsUsd)} estimated savings, ${summary.averageSpeedup.toFixed(2)}x estimated speedup, and ${accuracy}.`,
+    `proofroute routed ${summary.count} prompts ${source}, with ${ms(summary.p95RouterMs)} p95 decision time, ${percent(summary.p95RouterOverheadPct ?? 0)} p95 router overhead, ${money(summary.savingsUsd)} estimated savings, ${summary.averageSpeedup.toFixed(2)}x estimated speedup, and ${accuracy}.${providerCallText}`,
     '',
     `The proof split ${summary.localRoutes}/${summary.count} routes to local models and ${summary.cloudRoutes}/${summary.count} routes to cloud models, which makes the model menu disappear without hiding the economics. Intent mix was ${compactCounts(summary.intents)}, and model mix was ${compactCounts(summary.models)}.${policyText}${classifierText}${swapText}`,
     '',
@@ -644,6 +659,7 @@ export function renderShareSvg(report) {
   const policyMix = compactCounts(summary.policies ?? {}) || 'none';
   const overheadText = `   overhead ${percent(summary.p95RouterOverheadPct ?? 0)}`;
   const swapText = Number(summary.modelSwaps ?? 0) > 0 ? `   swaps ${summary.modelSwaps}/${summary.count}` : '';
+  const providerCallProof = ledger ? undefined : 'provider calls 0';
   const classifierMix = compactSvgText(compactCounts(summary.classifierBackends ?? {}) || 'none', 58);
   const intentMix = compactSvgText(compactCounts(summary.intents) || 'none', 80);
   const modelMix = compactSvgText(compactCounts(summary.models) || 'none', 80);
@@ -659,6 +675,7 @@ export function renderShareSvg(report) {
     `<text x="94" y="144" fill="#8bd3ff" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" letter-spacing="0">${svgEscape(source)}</text>`,
     '<text x="930" y="105" fill="#22c55e" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" text-anchor="end" letter-spacing="0">OpenAI-compatible proxy</text>',
     '<text x="930" y="134" fill="#eab308" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" text-anchor="end" letter-spacing="0">prompt-free proof</text>',
+    ...(providerCallProof ? [`<text x="930" y="154" fill="#38bdf8" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14" text-anchor="end" letter-spacing="0">${svgEscape(providerCallProof)}</text>`] : []),
     svgMetricCard(74, 200, 'saved', money(summary.savingsUsd), '#22c55e'),
     svgMetricCard(330, 200, 'speed lift', `${summary.averageSpeedup.toFixed(2)}x`, '#d946ef'),
     svgMetricCard(586, 200, 'p95 router', ms(summary.p95RouterMs), '#eab308'),

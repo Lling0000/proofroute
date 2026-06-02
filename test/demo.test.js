@@ -28,6 +28,8 @@ test('launch demo renders a zero-network proof card', async () => {
   const share = renderShare(report);
   assert.match(share, /SHAREABLE PROOF/);
   assert.match(share, /ZERO-NETWORK ROUTING RECEIPT/);
+  assert.match(share, /provider calls/);
+  assert.match(share, /0 provider calls/);
   assert.match(share, /router overhead/);
   assert.match(share, /policy mix/);
   assert.match(share, /classifier mix/);
@@ -35,6 +37,7 @@ test('launch demo renders a zero-network proof card', async () => {
   const markdown = renderShareMarkdown(report);
   assert.match(markdown, /proofroute routed 5 prompts/);
   assert.match(markdown, /p95 router overhead/);
+  assert.match(markdown, /Provider calls were 0/);
   assert.match(markdown, /Policy mix was/);
   assert.match(markdown, /Classifier mix was builtin:5/);
   assert.match(markdown, /Copy line:/);
@@ -43,6 +46,7 @@ test('launch demo renders a zero-network proof card', async () => {
   assert.match(svg, /^<svg/);
   assert.match(svg, /ProofRoute/);
   assert.match(svg, /routing proof/);
+  assert.match(svg, /provider calls 0/);
   assert.match(svg, /overhead/);
   assert.match(svg, /classifier mix/);
   assert.doesNotMatch(svg, /\x1b\[/);
