@@ -15,6 +15,7 @@ export function renderHelp() {
     `${BOLD}First proof${RESET}`,
     '  node ./bin/proofroute.js demo',
     '  node ./bin/proofroute.js route --trace --prompt "why this model?"',
+    '  node ./bin/proofroute.js route --trace --markdown --prompt "why this model?"',
     '  node ./bin/proofroute.js connect --port 8787',
     '',
     `${BOLD}Usage${RESET}`,
@@ -23,6 +24,7 @@ export function renderHelp() {
     '  proofroute route --max-cost-usd 0.001 --prompt "keep this cheap"',
     '  proofroute route --max-latency-ms 1500 --prompt "keep this fast"',
     '  proofroute route --trace --prompt "why this model?"',
+    '  proofroute route --trace --markdown --prompt "why this model?"',
     '  proofroute route --policy save --prompt "summarize these logs"',
     '  proofroute demo',
     '  proofroute share',
@@ -143,6 +145,7 @@ export function renderRepositoryProfile(report) {
     `${pad('vibe pitch', 16)} ${compactText(report.social.vibePitch, 132)}`,
     '',
     `${pad('first proof', 16)} ${report.commands.firstProof}`,
+    `${pad('single trace', 16)} ${report.commands.singleTrace}`,
     `${pad('public face', 16)} ${report.commands.publicFace}`,
     `${pad('npm dry run', 16)} ${report.commands.npmDryRun}`,
     `${pad('publish gate', 16)} ${report.commands.publishPreflight}`,
@@ -481,6 +484,9 @@ export function renderRouteTrace(decision) {
   const tradeoffs = renderCandidateTradeoffs(decision);
   const output = [
     title('routing trace'),
+    `${pad('single-prompt proof', 20)} provider calls 0 before execution, classifier ${routeClassifierBackend(decision)}, prompt text not printed; model and provider names are selected routing targets, not live calls.`,
+    `${pad('copy line', 20)} ${routeCopyLine(decision)}`,
+    '',
     `${BOLD}${decision.model.id}${RESET} wins for ${CYAN}${decision.intent.name}${RESET} under ${CYAN}${decision.policy ?? 'balanced'}${RESET} policy because quality ${signed(components.quality)}, context ${signed(components.context)}, local ${signed(components.local)}, requested ${signed(components.requested)}, cost ${signed(components.cost)}, and latency ${signed(components.latency)} settle at ${pct(decision.confidence)} probability.`,
     `${DIM}${decision.inputTokens} input tokens, ${decision.outputTokens} planned output tokens, ${money(decision.economics.savingsUsd)} estimated savings, ${decision.performance.speedup.toFixed(2)}x speedup, cache ${decision.cache?.hit ? 'hit' : 'miss'}.${RESET}`,
     '',
@@ -501,6 +507,24 @@ export function renderRouteTrace(decision) {
     `${DIM}Positive terms push a model up; negative terms push it down before stable Softmax turns scores into probabilities.${RESET}`
   );
   return output.join('\n');
+}
+
+export function renderRouteMarkdown(decision) {
+  const chosen = decision.ranked[0];
+  const components = chosen.components ?? {};
+  const routeKind = chosen.local ? 'local' : 'cloud';
+  const runnerUp = decision.ranked.find((candidate) => candidate.model !== chosen.model);
+  const runnerText = runnerUp ? ` Runner-up was ${runnerUp.model} at ${pct(runnerUp.probability)}, so the winning edge was ${signedPct(finite(chosen.probability) - finite(runnerUp.probability))}.` : ' No runner-up was viable.';
+  const rejectedText = (decision.rejected ?? []).length > 0 ? ` ${decision.rejected.length} configured models were filtered before ranking.` : '';
+  return [
+    `proofroute single-prompt routing receipt: ${routeCopyLine(decision)}`,
+    '',
+    `Proof boundary: provider calls were 0 before execution, classifier backend was ${routeClassifierBackend(decision)}, and prompt text was not printed. The selected ${routeKind} route is a target decision, not a live provider call.`,
+    '',
+    `Decision receipt: ${routeReceiptText(decision)}${runnerText}${rejectedText}`,
+    '',
+    `Score terms for ${chosen.model}: quality ${signed(components.quality)}, context ${signed(components.context)}, local ${signed(components.local)}, requested ${signed(components.requested)}, cost ${signed(components.cost)}, and latency ${signed(components.latency)}. Stable Softmax turned the ranked logits into model probabilities, so this receipt can be pasted into a pull request or launch thread without carrying the original prompt.`
+  ].join('\n');
 }
 
 function renderCandidateTradeoffs(decision, limit = 5) {
@@ -525,14 +549,33 @@ function renderCandidateTradeoffs(decision, limit = 5) {
 }
 
 function routeReceipt(decision) {
+  return `${pad('decision receipt', 18)} ${routeReceiptText(decision)}`;
+}
+
+function routeReceiptText(decision) {
   const chosen = decision.ranked[0];
   const runnerUp = decision.ranked.find((candidate) => candidate.model !== chosen.model);
   if (!runnerUp) {
-    return `${pad('decision receipt', 18)} ${chosen.model} is the only viable route at ${pct(chosen.probability)} probability with ${money(chosen.estimatedCostUsd)} cost, ${ms(chosen.estimatedLatencyMs)} latency, and ${contextUse(chosen, finite(decision.inputTokens) + finite(decision.outputTokens))}.`;
+    return `${chosen.model} is the only viable route at ${pct(chosen.probability)} probability with ${money(chosen.estimatedCostUsd)} cost, ${ms(chosen.estimatedLatencyMs)} latency, and ${contextUse(chosen, finite(decision.inputTokens) + finite(decision.outputTokens))}.`;
   }
   const qualityDelta = finite(chosen.components?.quality) - finite(runnerUp.components?.quality);
   const probabilityDelta = finite(chosen.probability) - finite(runnerUp.probability);
-  return `${pad('decision receipt', 18)} ${chosen.model} over ${runnerUp.model}: probability edge ${signedPct(probabilityDelta)}, quality term ${signed(qualityDelta)}, ${moneyDelta(chosen.estimatedCostUsd, runnerUp.estimatedCostUsd)}, ${latencyDelta(chosen.estimatedLatencyMs, runnerUp.estimatedLatencyMs)}, ${contextUse(chosen, finite(decision.inputTokens) + finite(decision.outputTokens))}.`;
+  return `${chosen.model} over ${runnerUp.model}: probability edge ${signedPct(probabilityDelta)}, quality term ${signed(qualityDelta)}, ${moneyDelta(chosen.estimatedCostUsd, runnerUp.estimatedCostUsd)}, ${latencyDelta(chosen.estimatedLatencyMs, runnerUp.estimatedLatencyMs)}, ${contextUse(chosen, finite(decision.inputTokens) + finite(decision.outputTokens))}.`;
+}
+
+function routeCopyLine(decision) {
+  const chosen = decision.ranked[0];
+  const runnerUp = decision.ranked.find((candidate) => candidate.model !== chosen.model);
+  const context = contextUse(chosen, finite(decision.inputTokens) + finite(decision.outputTokens));
+  if (!runnerUp) {
+    return `ProofRoute routed one ${decision.intent.name} prompt to ${chosen.model} at ${pct(chosen.probability)} confidence, ${context}, provider calls 0.`;
+  }
+  const probabilityDelta = finite(chosen.probability) - finite(runnerUp.probability);
+  return `ProofRoute routed one ${decision.intent.name} prompt to ${chosen.model} over ${runnerUp.model}: ${signedPct(probabilityDelta)} probability edge, ${moneyDelta(chosen.estimatedCostUsd, runnerUp.estimatedCostUsd)}, ${latencyDelta(chosen.estimatedLatencyMs, runnerUp.estimatedLatencyMs)}, ${context}, provider calls 0.`;
+}
+
+function routeClassifierBackend(decision) {
+  return decision.intent?.features?.backend ?? 'unknown';
 }
 
 function moneyDelta(left, right) {

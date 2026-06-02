@@ -26,6 +26,7 @@ test('repository profile keeps public metadata executable and shareable', async 
   assert.match(report.social.shortPitch, /zero-dependency OpenAI-compatible proxy/);
   assert.match(report.social.shortPitch, /local\/cloud split/);
   assert.match(report.commands.firstProof, /proofroute\.js demo/);
+  assert.equal(report.commands.singleTrace, 'node ./bin/proofroute.js route --trace --markdown --prompt "why this model?"');
   assert.equal(report.commands.publicFace, 'node ./bin/proofroute.js profile --check-public');
   assert.equal(report.commands.npmDryRun, 'npm run release:npm:dry-run');
   assert.equal(report.commands.publishPreflight, 'node ./bin/proofroute.js publish --check-public --check-actions');
@@ -55,6 +56,7 @@ test('repository profile keeps public metadata executable and shareable', async 
   assert.match(output, /publish gate/);
   assert.match(output, /support note/);
   assert.match(output, /support pack/);
+  assert.match(output, /single trace/);
   assert.match(output, /public launch/);
   assert.match(output, /public preflight/);
   assert.match(output, /npm dry run/);
@@ -102,6 +104,7 @@ test('profile command emits machine-readable repository face metadata', () => {
   assert.equal(report.github.topics.length, 20);
   assert.deepEqual(report.npm.binaries.map((entry) => entry.name), ['proofroute', 'proofroute-classifier']);
   assert.equal(report.commands.publicFace, 'node ./bin/proofroute.js profile --check-public');
+  assert.equal(report.commands.singleTrace, 'node ./bin/proofroute.js route --trace --markdown --prompt "why this model?"');
   assert.equal(report.commands.npmDryRun, 'npm run release:npm:dry-run');
   assert.equal(report.commands.publishPreflight, 'node ./bin/proofroute.js publish --check-public --check-actions');
   assert.equal(report.commands.publishSupportNote, 'node ./bin/proofroute.js publish --check-public --check-actions --probe-actions-dispatch --support-note');

@@ -19,7 +19,7 @@ import { exportTunedConfig, tuneFromEvents } from '../src/agent/tuner.js';
 import { demoCatalog, mergeConfig, readConfig } from '../src/config.js';
 import { ExternalClassifier } from '../src/controller/gpu-classifier.js';
 import { RouteController } from '../src/controller/route-controller.js';
-import { renderAgentExecution, renderAgentPlan, renderCalibration, renderClassifierBenchmark, renderClassifierEvidenceVerification, renderClassifierMetrics, renderClassifierSvg, renderConnect, renderConnectShell, renderDecision, renderDashboard, renderDoctor, renderGithubRepositoryState, renderHelp, renderIntentTraining, renderJson, renderLaunchDemo, renderLaunchReadiness, renderModelCatalog, renderPrivacy, renderPrivacyRepair, renderProofGate, renderPublicRepositoryFace, renderPublishReadiness, renderPublishSupportNote, renderReleasePreflight, renderReleaseProofPack, renderRepositoryProfile, renderRouteTrace, renderShare, renderShareMarkdown, renderShareSvg, renderSmoke, renderStats, renderTune } from '../src/view/terminal.js';
+import { renderAgentExecution, renderAgentPlan, renderCalibration, renderClassifierBenchmark, renderClassifierEvidenceVerification, renderClassifierMetrics, renderClassifierSvg, renderConnect, renderConnectShell, renderDecision, renderDashboard, renderDoctor, renderGithubRepositoryState, renderHelp, renderIntentTraining, renderJson, renderLaunchDemo, renderLaunchReadiness, renderModelCatalog, renderPrivacy, renderPrivacyRepair, renderProofGate, renderPublicRepositoryFace, renderPublishReadiness, renderPublishSupportNote, renderReleasePreflight, renderReleaseProofPack, renderRepositoryProfile, renderRouteMarkdown, renderRouteTrace, renderShare, renderShareMarkdown, renderShareSvg, renderSmoke, renderStats, renderTune } from '../src/view/terminal.js';
 
 const command = process.argv[2] ?? 'help';
 const args = parseArgs(process.argv.slice(3));
@@ -32,7 +32,7 @@ try {
     const prompt = await readPrompt(args);
     const controller = new RouteController(config, createClassifier(config));
     const decision = await controller.routeAsync({ prompt, tokens: Number(args.tokens ?? 0) || undefined, outputTokens: Number(args['output-tokens'] ?? args.outputTokens ?? 0) || undefined, maxCostUsd: parseNonNegativeNumber(args['max-cost-usd'] ?? args.maxCostUsd), maxLatencyMs: parseNonNegativeNumber(args['max-latency-ms'] ?? args.maxLatencyMs), policy: args.policy });
-    console.log(args.json ? renderJson(decision) : args.trace ? renderRouteTrace(decision) : renderDecision(decision));
+    console.log(args.json ? renderJson(decision) : args.markdown ? renderRouteMarkdown(decision) : args.trace ? renderRouteTrace(decision) : renderDecision(decision));
   } else if (command === 'demo') {
     const config = await loadRuntimeConfig(args);
     const controller = new RouteController(config, createClassifier(config));

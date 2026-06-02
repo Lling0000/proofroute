@@ -31,11 +31,11 @@ ProofRoute 的架构遵循 Agent-View-Controller。Controller 负责本地意图
 
 ## 快速开始
 
-安装或链接包之后，开发者应该记住的命令是 `proofroute demo`。在克隆仓库里，如果本机有 npm，`npm run demo` 指向同一个零网络 proof；在 `node ./bin/proofroute.js publish --check-public --check-actions` 证明 npm 公网可见性和匿名 GitHub 可见性之前，最诚实的复制运行路径仍然是从这个仓库直接执行 Node 命令，而第二条证明路径是单 prompt 的 trace receipt，它会展示选中模型为什么击败 runner-up。
+安装或链接包之后，开发者应该记住的命令是 `proofroute demo`。在克隆仓库里，如果本机有 npm，`npm run demo` 指向同一个零网络 proof；在 `node ./bin/proofroute.js publish --check-public --check-actions` 证明 npm 公网可见性和匿名 GitHub 可见性之前，最诚实的复制运行路径仍然是从这个仓库直接执行 Node 命令，而第二条证明路径是单 prompt 的 Markdown trace receipt，它会展示选中模型为什么击败 runner-up，同时不打印原始 prompt。
 
 ```sh
 node ./bin/proofroute.js demo
-node ./bin/proofroute.js route --trace --prompt "Refactor this webhook, explain the bug, and write a regression test."
+node ./bin/proofroute.js route --trace --markdown --prompt "Refactor this webhook, explain the bug, and write a regression test."
 ```
 
 ## 证据包
@@ -79,10 +79,10 @@ node ./bin/proofroute.js proxy --port 8787 --config examples/router.json
 
 ## 路由证明
 
-单个 prompt 的可解释路径从 `route` 开始。普通路由会展示意图、策略、选中模型、相对 runner-up 的 decision receipt，以及围绕概率、成本匹配、速度匹配和上下文使用量的候选模型 tradeoff 条，同时给出预估延迟、预估成本和相对最贵可行 baseline 的节省。trace 模式会先保留这张收据，再进一步展示策略权重、质量、上下文、本地偏置、requested-model、成本、延迟等贡献，以及因为上下文、可执行性、预算或延迟上限被过滤掉的模型。
+单个 prompt 的可解释路径从 `route` 开始。普通路由会展示意图、策略、选中模型、相对 runner-up 的 decision receipt，以及围绕概率、成本匹配、速度匹配和上下文使用量的候选模型 tradeoff 条，同时给出预估延迟、预估成本和相对最贵可行 baseline 的节省。trace 模式会先保留这张收据，再进一步展示策略权重、质量、上下文、本地偏置、requested-model、成本、延迟等贡献，以及因为上下文、可执行性、预算或延迟上限被过滤掉的模型。同一条命令加上 `--markdown` 后，会输出不携带原始 prompt 的单 prompt 收据，适合直接贴进 PR、发布帖或调试记录。
 
 ```sh
-node ./bin/proofroute.js route --trace --prompt "Refactor this webhook, explain the bug, and write a regression test."
+node ./bin/proofroute.js route --trace --markdown --prompt "Refactor this webhook, explain the bug, and write a regression test."
 ```
 
 更广的本地证据来自 `bench`、`calibrate`、`plan` 和 `fanout`。`bench` 重复运行本地路由并输出 p50、p95、节省和速度提升，`calibrate` 基于 labeled prompt suite 输出意图准确率和模型分布，`plan` 为复杂请求生成多智能体路由计划，`fanout` 把可执行角色决策并行派发到配置的 providers。这些命令让开发者在不离开终端的情况下验证 ProofRoute 是否真的减少了模型选择成本。

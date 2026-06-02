@@ -31,11 +31,11 @@ The default experience is intentionally zero configuration. A developer can clon
 
 ## Quick Start
 
-The package-facing memory hook is `proofroute demo` after the checkout is linked locally or the npm package is publicly available. Until public npm visibility and anonymous GitHub visibility are proven by `node ./bin/proofroute.js publish --check-public --check-actions`, the honest copy-paste path is direct Node execution from this repository, and the second proof path is the single-prompt trace receipt that shows why the selected model beat the runner-up.
+The package-facing memory hook is `proofroute demo` after the checkout is linked locally or the npm package is publicly available. Until public npm visibility and anonymous GitHub visibility are proven by `node ./bin/proofroute.js publish --check-public --check-actions`, the honest copy-paste path is direct Node execution from this repository, and the second proof path is the single-prompt Markdown trace receipt that shows why the selected model beat the runner-up without printing the original prompt.
 
 ```sh
 node ./bin/proofroute.js demo
-node ./bin/proofroute.js route --trace --prompt "Refactor this webhook, explain the bug, and write a regression test."
+node ./bin/proofroute.js route --trace --markdown --prompt "Refactor this webhook, explain the bug, and write a regression test."
 ```
 
 ## Proof Packs
@@ -79,10 +79,10 @@ node ./bin/proofroute.js proxy --port 8787 --config examples/router.json
 
 ## Routing Proof
 
-The fastest way to understand one prompt is `route`. It prints detected intent, resolved policy, selected model, a decision receipt against the runner-up, candidate tradeoff bars for probability, cost fit, speed fit, and context use, estimated latency, estimated cost, and savings against the most expensive viable baseline. Trace mode keeps that receipt first, then adds the weighted quality, context, local, requested-model, cost, and latency contributions, plus the models filtered out by context, executability, budget, or latency ceilings.
+The fastest way to understand one prompt is `route`. It prints detected intent, resolved policy, selected model, a decision receipt against the runner-up, candidate tradeoff bars for probability, cost fit, speed fit, and context use, estimated latency, estimated cost, and savings against the most expensive viable baseline. Trace mode keeps that receipt first, then adds the weighted quality, context, local, requested-model, cost, and latency contributions, plus the models filtered out by context, executability, budget, or latency ceilings. When the same command uses `--markdown`, it emits a prompt-free single-prompt receipt that can be pasted into a pull request, launch thread, or debugging note without carrying the original prompt text.
 
 ```sh
-node ./bin/proofroute.js route --trace --prompt "Refactor this webhook, explain the bug, and write a regression test."
+node ./bin/proofroute.js route --trace --markdown --prompt "Refactor this webhook, explain the bug, and write a regression test."
 ```
 
 Broader local evidence comes from `bench`, `calibrate`, `plan`, and `fanout`. The benchmark reports p50 and p95 Controller latency plus money saved and speed gained. Calibration reports labeled intent accuracy, savings, average speedup, intent mix, and model mix. Planning turns one complex request into multi-agent role routing before provider calls happen. Fanout batches executable role decisions in one Controller pass and dispatches them in parallel through configured providers.

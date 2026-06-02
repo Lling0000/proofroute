@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { demoCatalog } from '../src/config.js';
 import { classifyIntent, stableSoftmax } from '../src/controller/intent.js';
 import { NoRouteError, RouteController } from '../src/controller/route-controller.js';
-import { renderDecision, renderRouteTrace } from '../src/view/terminal.js';
+import { renderDecision, renderRouteMarkdown, renderRouteTrace } from '../src/view/terminal.js';
 
 test('stableSoftmax remains finite for extreme logits', () => {
   const probabilities = stableSoftmax([10000, 9999, -10000], 0.1);
@@ -59,7 +60,40 @@ test('route trace renders scoring contributions for the winning model', () => {
   assert.match(output, /quality/);
   assert.match(output, /latency/);
   assert.match(output, /balanced/);
+  assert.match(output, /single-prompt proof/);
+  assert.match(output, /provider calls 0/);
+  assert.match(output, /classifier builtin/);
+  assert.match(output, /prompt text not printed/);
+  assert.match(output, /copy line/);
   assert.doesNotMatch(output, /NaN|Infinity/);
+  assert.doesNotMatch(output, /Write a focused SQL migration test|production bug/);
+});
+
+test('route markdown renders a prompt-free single-prompt receipt', () => {
+  const controller = new RouteController(demoCatalog());
+  const decision = controller.route({ prompt: 'secret production prompt: refactor webhook and explain the incident.' });
+  const output = renderRouteMarkdown(decision);
+  assert.match(output, /single-prompt routing receipt/);
+  assert.match(output, /Decision receipt:/);
+  assert.match(output, /provider calls were 0/);
+  assert.match(output, /Prompt text was not printed|prompt text was not printed/);
+  assert.match(output, /Stable Softmax/);
+  assert.doesNotMatch(output, /\x1b\[/);
+  assert.doesNotMatch(output, /secret production prompt|refactor webhook|incident/);
+});
+
+test('route command can emit markdown trace without leaking prompt text', () => {
+  const result = spawnSync(process.execPath, ['./bin/proofroute.js', 'route', '--trace', '--markdown', '--prompt', 'secret production prompt: refactor webhook and explain the incident.'], {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+    timeout: 2000
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /single-prompt routing receipt/);
+  assert.match(result.stdout, /Decision receipt:/);
+  assert.match(result.stdout, /provider calls 0/);
+  assert.doesNotMatch(result.stdout, /\x1b\[/);
+  assert.doesNotMatch(result.stdout, /secret production prompt|refactor webhook|incident/);
 });
 
 test('route controller records models rejected by context window gates', () => {
