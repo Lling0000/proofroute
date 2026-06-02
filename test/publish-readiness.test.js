@@ -8,12 +8,15 @@ import { join } from 'node:path';
 import { publishReadinessReport, writePublishSupportPack } from '../src/agent/publish-readiness.js';
 import { renderPublishReadiness, renderPublishSupportNote } from '../src/view/terminal.js';
 
+const currentTestSha = 'abc1230000000000000000000000000000000000';
+const staleTestSha = 'def4560000000000000000000000000000000000';
+
 test('publish readiness passes when package, npm, auth, and Actions evidence are present', async () => {
   const report = await publishReadinessReport({
     checkActions: true,
     runner: fakePublishRunner({
       auth: true,
-      actionsRuns: [{ workflowName: 'ProofRoute CI', status: 'completed', conclusion: 'success', headSha: 'abc123' }]
+      actionsRuns: [{ workflowName: 'ProofRoute CI', status: 'completed', conclusion: 'success', headSha: currentTestSha }]
     })
   });
   assert.equal(report.kind, 'proofroute-publish-readiness-v1');
@@ -89,7 +92,7 @@ test('publish readiness requires a passing run from the requested workflow', asy
         workflowName: 'Unrelated',
         status: 'completed',
         conclusion: 'success',
-        headSha: 'abc123'
+        headSha: currentTestSha
       }]
     })
   });
@@ -97,6 +100,26 @@ test('publish readiness requires a passing run from the requested workflow', asy
   assert.equal(report.actions.summary.pass, false);
   assert.match(report.actions.summary.detail, /ProofRoute CI runs 0/);
   assert.ok(report.blockers.some((blocker) => blocker.id === 'github_actions_not_passing'));
+});
+
+test('publish readiness rejects stale passing workflow runs from older commits', async () => {
+  const report = await publishReadinessReport({
+    checkActions: true,
+    runner: fakePublishRunner({
+      auth: true,
+      actionsRuns: [{
+        workflowName: 'ProofRoute CI',
+        status: 'completed',
+        conclusion: 'success',
+        headSha: staleTestSha
+      }]
+    })
+  });
+  assert.equal(report.status, 'fail');
+  assert.equal(report.actions.summary.pass, false);
+  assert.match(report.actions.summary.detail, /current head abc1230 no/);
+  assert.equal(report.actions.head.sha, currentTestSha);
+  assert.ok(report.blockers.some((blocker) => blocker.id === 'github_actions_not_passing' && blocker.evidence.headSha === currentTestSha));
 });
 
 test('publish readiness contrasts authenticated GitHub visibility with anonymous public face', async () => {
@@ -419,8 +442,11 @@ test('publish readiness redacts command output before JSON reports expose it', a
   assert.doesNotMatch(encoded, /secret-token|user:pass|sk-secret-production-key|\/Users\/alice|Authorization: Bearer [^<]/);
 });
 
-function fakePublishRunner({ auth = true, actionsRuns = [], dispatchError, accountSearchError, accountSearchItems = [{ full_name: 'Lling0000/proofroute' }], packReport = fakePackReport(), publishStderr = 'npm notice Publishing to https://registry.npmjs.org/ with tag latest and public access (dry-run)\n' } = {}) {
+function fakePublishRunner({ auth = true, actionsRuns = [], dispatchError, accountSearchError, accountSearchItems = [{ full_name: 'Lling0000/proofroute' }], packReport = fakePackReport(), publishStderr = 'npm notice Publishing to https://registry.npmjs.org/ with tag latest and public access (dry-run)\n', gitHead = currentTestSha } = {}) {
   return async (command, args) => {
+    if (command === 'git' && args[0] === 'rev-parse' && args[1] === 'HEAD') {
+      return { stdout: `${gitHead}\n`, stderr: '' };
+    }
     if (command === 'npm' && args[0] === '--version') {
       return { stdout: '11.16.0\n', stderr: '' };
     }

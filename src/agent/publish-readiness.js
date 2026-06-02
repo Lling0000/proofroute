@@ -342,6 +342,7 @@ async function githubActionsCheck({ repo, cwd, runner, probeDispatch = false, wo
   const permissions = await runCommandSafe({ command: 'gh', args: ['api', `repos/${repo}/actions/permissions`, '--jq', '{enabled,allowed_actions}'], cwd, runner });
   const dispatch = probeDispatch ? await runCommandSafe({ command: 'gh', args: ['workflow', 'run', workflow, '-R', repo, '--ref', ref], cwd, runner }) : undefined;
   const runs = await runCommandSafe({ command: 'gh', args: ['run', 'list', '-R', repo, '--limit', '5', '--json', 'databaseId,headSha,status,conclusion,workflowName,createdAt,url'], cwd, runner });
+  const head = await gitHeadCheck({ cwd, runner });
   let parsedPermissions;
   let parsedRuns = [];
   try {
@@ -356,21 +357,25 @@ async function githubActionsCheck({ repo, cwd, runner, probeDispatch = false, wo
   }
   const enabled = parsedPermissions?.enabled === true;
   const workflowRuns = parsedRuns.filter((run) => String(run.workflowName ?? '') === String(workflow));
+  const headSha = head.sha;
   const hasRuns = workflowRuns.length > 0;
-  const hasPassingRun = workflowRuns.some((run) => run.status === 'completed' && run.conclusion === 'success');
+  const passingRuns = workflowRuns.filter((run) => run.status === 'completed' && run.conclusion === 'success');
+  const hasPassingRun = passingRuns.some((run) => sameSha(run.headSha, headSha));
   const dispatchOk = dispatch === undefined || dispatch.ok;
-  const pass = permissions.ok && runs.ok && enabled && dispatchOk && hasRuns && hasPassingRun;
+  const pass = permissions.ok && runs.ok && head.pass && enabled && dispatchOk && hasRuns && hasPassingRun;
   const dispatchDetail = dispatch === undefined ? '' : `, dispatch probe ${dispatch.ok ? 'ok' : `failed ${commandMessage(dispatch)}`}`;
+  const headDetail = headSha ? `current head ${shortSha(headSha)}` : 'current head unknown';
   const summary = checkFromStatus({
     id: 'github_actions',
     label: 'GitHub Actions',
     pass,
-    detail: pass ? `Actions are enabled and ${workflowRuns.length}/${parsedRuns.length} recent runs for ${workflow} include a passing completed run${dispatchDetail}.` : `Actions enabled ${enabled}, recent runs ${parsedRuns.length}, ${workflow} runs ${workflowRuns.length}, passing ${workflow} runs ${hasPassingRun ? 'yes' : 'no'}, permissions command ${permissions.ok ? 'ok' : 'failed'}, run list ${runs.ok ? 'ok' : 'failed'}${dispatchDetail}.`
+    detail: pass ? `Actions are enabled and ${workflowRuns.length}/${parsedRuns.length} recent runs for ${workflow} include a passing completed run for ${headDetail}${dispatchDetail}.` : `Actions enabled ${enabled}, recent runs ${parsedRuns.length}, ${workflow} runs ${workflowRuns.length}, passing ${workflow} runs for ${headDetail} ${hasPassingRun ? 'yes' : 'no'}, permissions command ${permissions.ok ? 'ok' : 'failed'}, run list ${runs.ok ? 'ok' : 'failed'}, git head ${head.pass ? 'ok' : 'failed'}${dispatchDetail}.`
   });
   return {
     summary,
     permissions: parsedPermissions,
     dispatch: dispatch ? summarizeCommand(dispatch) : undefined,
+    head,
     runs: parsedRuns,
     workflow,
     workflowRuns,
@@ -379,6 +384,32 @@ async function githubActionsCheck({ repo, cwd, runner, probeDispatch = false, wo
       runs: runs.ok ? undefined : commandMessage(runs)
     }
   };
+}
+
+async function gitHeadCheck({ cwd, runner }) {
+  const result = await runCommandSafe({ command: 'git', args: ['rev-parse', 'HEAD'], cwd, runner });
+  const sha = result.ok ? normalizeSha(result.stdout) : '';
+  return {
+    pass: Boolean(sha),
+    sha,
+    output: summarizeCommand(result)
+  };
+}
+
+function normalizeSha(value) {
+  const text = String(value ?? '').trim().toLowerCase();
+  return /^[a-f0-9]{40}$/.test(text) ? text : '';
+}
+
+function sameSha(left, right) {
+  const normalizedLeft = normalizeSha(left);
+  const normalizedRight = normalizeSha(right);
+  return Boolean(normalizedLeft && normalizedRight && normalizedLeft === normalizedRight);
+}
+
+function shortSha(value) {
+  const sha = normalizeSha(value);
+  return sha ? sha.slice(0, 7) : 'unknown';
 }
 
 function publishBlockers({ npm, account, publicFace, actions, repository, npmCommand, registry }) {
@@ -523,7 +554,10 @@ function publishBlockers({ npm, account, publicFace, actions, repository, npmCom
         checkId: 'github_actions',
         dispatchCode: actions.dispatch?.code,
         enabled: actions.permissions?.enabled,
-        recentRuns: actions.runs?.length ?? 0
+        recentRuns: actions.runs?.length ?? 0,
+        workflow: actions.workflow,
+        headSha: actions.head?.sha,
+        workflowRuns: actions.workflowRuns?.length ?? 0
       },
       nextAction: userDisabled ? 'Open GitHub account Actions settings or Support; repo-level Actions permissions are already enabled, so repeating repo API toggles will not fix this blocker.' : 'Run the ProofRoute CI workflow after Actions access is healthy, then rerun publish --check-actions.',
       supportMessage: userDisabled ? githubActionsSupportMessage({ repository, actions }) : undefined,
