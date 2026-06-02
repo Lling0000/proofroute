@@ -50,6 +50,8 @@ export async function publishReadinessReport({
   const metadata = packageMetadataCheck(pkg);
   checks.push(metadata);
   npm.metadata = metadata;
+  const source = await gitSourceCheck({ cwd, runner });
+  checks.push(source.summary);
   const cli = await npmCliCheck({ npmCommand, cwd, runner });
   checks.push(cli);
   npm.cli = cli;
@@ -85,19 +87,19 @@ export async function publishReadinessReport({
   }
   let actions;
   if (checkActions) {
-    actions = await githubActionsCheck({ repo: repository, cwd, runner, probeDispatch: probeActionsDispatch, workflow: actionsWorkflow, ref: actionsRef });
+    actions = await githubActionsCheck({ repo: repository, cwd, runner, probeDispatch: probeActionsDispatch, workflow: actionsWorkflow, ref: actionsRef, head: source.head });
     checks.push(actions.summary);
   }
   const requiredPass = checks.filter((check) => check.severity !== 'advisory').every((check) => check.pass || check.skipped);
   const skippedRequired = checks.some((check) => check.severity !== 'advisory' && check.skipped);
-  const blockers = publishBlockers({ npm, account, publicFace, actions, repository, npmCommand, registry });
+  const blockers = publishBlockers({ npm, source, account, publicFace, actions, repository, npmCommand, registry });
   const nextActions = blockers.map((blocker) => ({
     id: `${blocker.id}_next`,
     forBlocker: blocker.id,
     summary: blocker.nextAction,
     command: blocker.command
   }));
-  const summary = publishReadinessSummary({ npm, blockers });
+  const summary = publishReadinessSummary({ npm, source, blockers });
   return {
     kind: 'proofroute-publish-readiness-v1',
     generatedAt: new Date().toISOString(),
@@ -110,6 +112,7 @@ export async function publishReadinessReport({
       publishAccess: pkg.publishConfig?.access ?? 'default'
     },
     npm,
+    source,
     github,
     account,
     public: publicFace,
@@ -329,7 +332,7 @@ async function githubAccountVisibilityCheck({ repo, cwd, runner }) {
   };
 }
 
-async function githubActionsCheck({ repo, cwd, runner, probeDispatch = false, workflow = 'ProofRoute CI', ref = 'main' }) {
+async function githubActionsCheck({ repo, cwd, runner, probeDispatch = false, workflow = 'ProofRoute CI', ref = 'main', head: sourceHead }) {
   if (!repo) {
     const summary = checkFromStatus({
       id: 'github_actions',
@@ -341,8 +344,8 @@ async function githubActionsCheck({ repo, cwd, runner, probeDispatch = false, wo
   }
   const permissions = await runCommandSafe({ command: 'gh', args: ['api', `repos/${repo}/actions/permissions`, '--jq', '{enabled,allowed_actions}'], cwd, runner });
   const dispatch = probeDispatch ? await runCommandSafe({ command: 'gh', args: ['workflow', 'run', workflow, '-R', repo, '--ref', ref], cwd, runner }) : undefined;
-  const runs = await runCommandSafe({ command: 'gh', args: ['run', 'list', '-R', repo, '--limit', '5', '--json', 'databaseId,headSha,status,conclusion,workflowName,createdAt,url'], cwd, runner });
-  const head = await gitHeadCheck({ cwd, runner });
+  const runs = await runCommandSafe({ command: 'gh', args: ['run', 'list', '-R', repo, '--limit', '20', '--json', 'databaseId,headSha,status,conclusion,workflowName,createdAt,url'], cwd, runner });
+  const head = sourceHead ?? await gitHeadCheck({ cwd, runner });
   let parsedPermissions;
   let parsedRuns = [];
   try {
@@ -391,8 +394,52 @@ async function gitHeadCheck({ cwd, runner }) {
   const sha = result.ok ? normalizeSha(result.stdout) : '';
   return {
     pass: Boolean(sha),
+    source: 'local_git_head',
+    ref: 'HEAD',
     sha,
+    shortSha: shortSha(sha),
     output: summarizeCommand(result)
+  };
+}
+
+async function gitSourceCheck({ cwd, runner }) {
+  const head = await gitHeadCheck({ cwd, runner });
+  const status = await runCommandSafe({ command: 'git', args: ['status', '--porcelain'], cwd, runner });
+  const dirtyCount = status.ok ? countPorcelainStatus(status.stdout) : undefined;
+  const clean = status.ok && dirtyCount === 0;
+  const pass = head.pass && clean;
+  const detail = sourceTreeDetail({ head, status, dirtyCount, clean });
+  return {
+    summary: checkFromStatus({
+      id: 'source_tree',
+      label: 'source tree',
+      pass,
+      detail
+    }),
+    head,
+    clean,
+    dirty: status.ok ? dirtyCount > 0 : undefined,
+    dirtyCount,
+    status: summarizeSourceStatusCommand(status)
+  };
+}
+
+function countPorcelainStatus(stdout) {
+  return String(stdout ?? '').split(/\r?\n/).filter((line) => line.trim()).length;
+}
+
+function sourceTreeDetail({ head, status, dirtyCount, clean }) {
+  const headText = head.sha ? `git HEAD ${shortSha(head.sha)}` : 'git HEAD unavailable';
+  if (!head.pass) return `${headText}: ${commandMessage(head.output ?? {})}.`;
+  if (!status.ok) return `${headText} resolved, but git status failed: ${commandMessage(status)}.`;
+  return clean ? `${headText} resolved and working tree is clean.` : `${headText} resolved, but working tree has ${dirtyCount} uncommitted change${dirtyCount === 1 ? '' : 's'}.`;
+}
+
+function summarizeSourceStatusCommand(result) {
+  const summary = summarizeCommand(result);
+  return {
+    ...summary,
+    stdout: result.ok ? '' : summary.stdout
   };
 }
 
@@ -412,8 +459,31 @@ function shortSha(value) {
   return sha ? sha.slice(0, 7) : 'unknown';
 }
 
-function publishBlockers({ npm, account, publicFace, actions, repository, npmCommand, registry }) {
+function publishBlockers({ npm, source, account, publicFace, actions, repository, npmCommand, registry }) {
   const blockers = [];
+  if (source?.summary && !source.summary.pass) {
+    const headUnavailable = !source.head?.pass;
+    blockers.push({
+      id: headUnavailable ? 'source_head_unavailable' : 'source_tree_dirty',
+      source: 'source',
+      title: headUnavailable ? 'Make the local git HEAD resolvable before publication.' : 'Commit or stash local source changes before publication.',
+      detail: source.summary.detail,
+      evidence: {
+        checkId: 'source_tree',
+        headSha: source.head?.sha,
+        headSource: source.head?.source,
+        headRef: source.head?.ref,
+        dirty: source.dirty,
+        dirtyCount: source.dirtyCount,
+        statusCode: source.status?.code
+      },
+      nextAction: headUnavailable ? 'Run git rev-parse HEAD, repair the local checkout, then rerun proofroute publish so the package and CI evidence have a stable source commit.' : 'Run git status --short, commit or stash the local changes, then rerun proofroute publish so npm pack and CI evidence describe the same source tree.',
+      command: headUnavailable ? 'git rev-parse HEAD' : 'git status --short',
+      scope: 'local',
+      localFixable: true,
+      supportCategory: 'source_tree'
+    });
+  }
   if (npm.cli && !npm.cli.pass) {
     blockers.push({
       id: 'npm_cli_missing',
@@ -557,6 +627,8 @@ function publishBlockers({ npm, account, publicFace, actions, repository, npmCom
         recentRuns: actions.runs?.length ?? 0,
         workflow: actions.workflow,
         headSha: actions.head?.sha,
+        headSource: actions.head?.source,
+        headRef: actions.head?.ref,
         workflowRuns: actions.workflowRuns?.length ?? 0
       },
       nextAction: userDisabled ? 'Open GitHub account Actions settings or Support; repo-level Actions permissions are already enabled, so repeating repo API toggles will not fix this blocker.' : 'Run the ProofRoute CI workflow after Actions access is healthy, then rerun publish --check-actions.',
@@ -569,8 +641,8 @@ function publishBlockers({ npm, account, publicFace, actions, repository, npmCom
   return blockers;
 }
 
-function publishReadinessSummary({ npm, blockers }) {
-  const localChecks = [npm.metadata, npm.cli, npm.pack, npm.publishDryRun].filter(Boolean);
+function publishReadinessSummary({ npm, source, blockers }) {
+  const localChecks = [source?.summary, npm.metadata, npm.cli, npm.pack, npm.publishDryRun].filter(Boolean);
   const localEvidence = localChecks.length === 0
     ? 'not_checked'
     : localChecks.every((check) => check.pass)
@@ -662,6 +734,7 @@ function publishSupportStatusSummary({ report, generatedAt }) {
   const actions = report.actions;
   const account = report.account;
   const github = report.github;
+  const source = report.source;
   const blockerIds = (report.blockers ?? []).map((blocker) => blocker.id);
   return {
     kind: 'proofroute-publish-support-status-v1',
@@ -680,6 +753,16 @@ function publishSupportStatusSummary({ report, generatedAt }) {
       version: report.package?.version,
       repository: report.package?.repository,
       publishAccess: report.package?.publishAccess
+    },
+    source: {
+      tree: source?.summary ? checkState(source.summary) : 'not_checked',
+      head: source?.head?.sha,
+      headShort: source?.head?.shortSha,
+      headSource: source?.head?.source,
+      headRef: source?.head?.ref,
+      clean: source?.clean,
+      dirty: source?.dirty,
+      dirtyCount: source?.dirtyCount
     },
     npm: {
       command: npmEvidence.command ?? report.npm?.command,
@@ -705,7 +788,13 @@ function publishSupportStatusSummary({ report, generatedAt }) {
       npmStatus: publicFace?.npm?.status,
       actions: actions?.summary ? checkState(actions.summary) : 'not_checked',
       actionsEnabled: actions?.permissions?.enabled,
+      actionWorkflow: actions?.workflow,
+      actionHead: actions?.head?.sha,
+      actionHeadShort: actions?.head?.shortSha,
+      actionHeadSource: actions?.head?.source,
+      actionHeadRef: actions?.head?.ref,
       actionRunCount: actions?.runs?.length,
+      actionWorkflowRunCount: actions?.workflowRuns?.length,
       dispatch: actions?.dispatch ? actions.dispatch.ok ? 'pass' : 'fail' : 'not_checked'
     },
     support: {

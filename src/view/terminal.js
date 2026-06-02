@@ -133,6 +133,7 @@ export function renderRepositoryProfile(report) {
     '',
     `${pad('npm', 16)} ${report.npm.name}@${report.npm.version}`,
     `${pad('description', 16)} ${report.npm.description}`,
+    `${pad('binaries', 16)} ${(report.npm.binaries ?? []).map((entry) => `${entry.name}=${entry.path} (${entry.role})`).join(', ')}`,
     `${pad('keywords', 16)} ${compactText(report.npm.keywordLine, 132)}`,
     '',
     `${pad('social preview', 16)} ${report.social.preview}`,
@@ -285,7 +286,7 @@ export function renderPublishReadiness(report) {
   const blockers = (report.blockers ?? []).map((blocker) => `${MAGENTA}${blocker.id}${RESET} ${DIM}${compactText(blocker.nextAction, 112)}${RESET}`);
   return [
     title('publish readiness'),
-    `${BOLD}${mark}${RESET} ${DIM}${report.package?.name}@${report.package?.version} publish preflight for package surface, npm registry auth, public visibility, and GitHub Actions evidence.${RESET}`,
+    `${BOLD}${mark}${RESET} ${DIM}${report.package?.name}@${report.package?.version} publish preflight for source tree, package surface, npm registry auth, public visibility, and GitHub Actions evidence.${RESET}`,
     `${pad('npm command', 16)} ${report.npm?.command ?? 'npm'}`,
     `${pad('npm evidence', 16)} ${npmEvidence}`,
     `${pad('local evidence', 16)} ${localEvidence}`,

@@ -16,6 +16,8 @@ test('repository profile keeps public metadata executable and shareable', async 
   assert.equal(report.github.homepage, 'https://github.com/Lling0000/proofroute#readme');
   assert.equal(report.github.repository, 'Lling0000/proofroute');
   assert.equal(report.npm.name, 'proofroute');
+  assert.deepEqual(report.npm.binaries.map((entry) => entry.name), ['proofroute', 'proofroute-classifier']);
+  assert.equal(report.npm.binaries.find((entry) => entry.name === 'proofroute-classifier').role, 'reference classifier sidecar');
   assert.ok(report.npm.keywords.includes('vibe-coding'));
   assert.match(report.npm.description, /coding agents/);
   assert.equal(report.social.badges.length, 7);
@@ -44,6 +46,8 @@ test('repository profile keeps public metadata executable and shareable', async 
   assert.match(output, /REPOSITORY FACE/);
   assert.match(output, /topics/);
   assert.match(output, /badges/);
+  assert.match(output, /binaries/);
+  assert.match(output, /proofroute-classifier/);
   assert.match(output, /short pitch/);
   assert.match(output, /public face/);
   assert.match(output, /publish gate/);
@@ -94,6 +98,7 @@ test('profile command emits machine-readable repository face metadata', () => {
   assert.equal(result.status, 0);
   const report = JSON.parse(result.stdout);
   assert.equal(report.github.topics.length, 20);
+  assert.deepEqual(report.npm.binaries.map((entry) => entry.name), ['proofroute', 'proofroute-classifier']);
   assert.equal(report.commands.publicFace, 'node ./bin/proofroute.js profile --check-public');
   assert.equal(report.commands.npmDryRun, 'npm run release:npm:dry-run');
   assert.equal(report.commands.publishPreflight, 'node ./bin/proofroute.js publish --check-public --check-actions');

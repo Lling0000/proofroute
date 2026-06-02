@@ -2,9 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { publishReadinessReport, writePublishSupportPack } from '../src/agent/publish-readiness.js';
 import { renderPublishReadiness, renderPublishSupportNote } from '../src/view/terminal.js';
 
@@ -29,9 +30,14 @@ test('publish readiness passes when package, npm, auth, and Actions evidence are
   assert.equal(report.npm.evidence.version, '11.16.0');
   assert.equal(report.npm.evidence.pack, 'pass');
   assert.equal(report.npm.evidence.requiredFilesMissing, 0);
+  assert.equal(report.source.summary.pass, true);
+  assert.equal(report.source.head.sha, currentTestSha);
+  assert.equal(report.source.clean, true);
+  assert.equal(report.checks.find((check) => check.id === 'source_tree').pass, true);
   assert.equal(report.summary.localEvidence, 'pass');
   assert.equal(report.summary.remainingBlockerScope, 'none');
   assert.equal(report.actions.summary.pass, true);
+  assert.equal(report.actions.head.sha, report.source.head.sha);
   assert.deepEqual(report.blockers, []);
   assert.deepEqual(report.nextActions, []);
   const output = renderPublishReadiness(report);
@@ -42,6 +48,40 @@ test('publish readiness passes when package, npm, auth, and Actions evidence are
   assert.match(output, /GitHub Actions/);
   assert.doesNotMatch(output, /launch evidence/);
   assert.doesNotMatch(output, /--support-pack proofroute-publish-support-pack/);
+});
+
+test('publish readiness fails when the source tree has uncommitted changes', async () => {
+  const report = await publishReadinessReport({
+    runner: fakePublishRunner({
+      auth: true,
+      gitStatus: ' M src/agent/publish-readiness.js\n?? tmp-local.txt\n'
+    })
+  });
+  assert.equal(report.status, 'fail');
+  assert.equal(report.source.summary.pass, false);
+  assert.equal(report.source.dirty, true);
+  assert.equal(report.source.dirtyCount, 2);
+  assert.equal(report.source.status.stdout, '');
+  assert.equal(report.summary.localEvidence, 'fail');
+  assert.equal(report.summary.remainingBlockerScope, 'local_or_mixed');
+  assert.ok(report.blockers.some((blocker) => blocker.id === 'source_tree_dirty' && blocker.evidence.dirtyCount === 2));
+  assert.ok(report.nextActions.some((action) => action.forBlocker === 'source_tree_dirty'));
+  assert.doesNotMatch(JSON.stringify(report), /tmp-local\.txt|src\/agent\/publish-readiness\.js/);
+});
+
+test('publish readiness fails when the source head is unavailable', async () => {
+  const report = await publishReadinessReport({
+    runner: fakePublishRunner({
+      auth: true,
+      gitHead: 'not-a-sha'
+    })
+  });
+  assert.equal(report.status, 'fail');
+  assert.equal(report.source.summary.pass, false);
+  assert.equal(report.source.head.pass, false);
+  assert.equal(report.summary.localEvidence, 'fail');
+  assert.ok(report.blockers.some((blocker) => blocker.id === 'source_head_unavailable'));
+  assert.ok(report.nextActions.some((action) => action.forBlocker === 'source_head_unavailable'));
 });
 
 test('publish readiness fails when npm auth and CI evidence are missing', async () => {
@@ -119,6 +159,7 @@ test('publish readiness rejects stale passing workflow runs from older commits',
   assert.equal(report.actions.summary.pass, false);
   assert.match(report.actions.summary.detail, /current head abc1230 no/);
   assert.equal(report.actions.head.sha, currentTestSha);
+  assert.equal(report.actions.head.sha, report.source.head.sha);
   assert.ok(report.blockers.some((blocker) => blocker.id === 'github_actions_not_passing' && blocker.evidence.headSha === currentTestSha));
 });
 
@@ -298,8 +339,11 @@ test('publish support pack writes redacted evidence files without changing block
 
 test('publish CLI renders support note while json keeps priority', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'proofroute-publish-'));
+  const cleanCwd = join(dir, 'clean-source');
   const npmPath = join(dir, 'npm-fake.mjs');
+  const proofrouteBin = fileURLToPath(new URL('../bin/proofroute.js', import.meta.url));
   const pack = JSON.stringify([fakePackReport()]);
+  await initCleanGitCwd(cleanCwd);
   await writeFile(npmPath, `#!/usr/bin/env node
 const args = process.argv.slice(2);
 if (args[0] === '--version') {
@@ -318,23 +362,23 @@ if (args[0] === '--version') {
 `, 'utf8');
   await chmod(npmPath, 0o755);
   try {
-    const support = spawnSync(process.execPath, ['./bin/proofroute.js', 'publish', '--npm', npmPath, '--support-note'], {
-      cwd: new URL('..', import.meta.url),
+    const support = spawnSync(process.execPath, [proofrouteBin, 'publish', '--npm', npmPath, '--support-note'], {
+      cwd: cleanCwd,
       encoding: 'utf8'
     });
     assert.equal(support.status, 1);
     assert.match(support.stdout, /ProofRoute publish support note/);
     assert.doesNotMatch(support.stdout, /PUBLISH READINESS|\x1b\[/);
-    const json = spawnSync(process.execPath, ['./bin/proofroute.js', 'publish', '--npm', npmPath, '--support-note', '--json'], {
-      cwd: new URL('..', import.meta.url),
+    const json = spawnSync(process.execPath, [proofrouteBin, 'publish', '--npm', npmPath, '--support-note', '--json'], {
+      cwd: cleanCwd,
       encoding: 'utf8'
     });
     assert.equal(json.status, 1);
     assert.doesNotMatch(json.stdout, /ProofRoute publish support note/);
     assert.equal(JSON.parse(json.stdout).kind, 'proofroute-publish-readiness-v1');
     const packDir = join(dir, 'support-pack');
-    const packJson = spawnSync(process.execPath, ['./bin/proofroute.js', 'publish', '--npm', npmPath, '--support-pack', packDir, '--json'], {
-      cwd: new URL('..', import.meta.url),
+    const packJson = spawnSync(process.execPath, [proofrouteBin, 'publish', '--npm', npmPath, '--support-pack', packDir, '--json'], {
+      cwd: cleanCwd,
       encoding: 'utf8'
     });
     assert.equal(packJson.status, 1);
@@ -344,6 +388,8 @@ if (args[0] === '--version') {
     assert.equal(packReport.supportPack.status, 'fail');
     assert.equal(packReport.supportPack.statusSummary.kind, 'proofroute-publish-support-status-v1');
     assert.equal(packReport.supportPack.statusSummary.localEvidence, 'pass');
+    assert.equal(packReport.supportPack.statusSummary.source.tree, 'pass');
+    assert.equal(packReport.supportPack.statusSummary.source.clean, true);
     assert.ok(existsSync(join(packDir, 'manifest.json')));
     assert.ok(existsSync(join(packDir, 'status.json')));
     assert.ok(existsSync(join(packDir, 'publish-readiness.json')));
@@ -359,15 +405,15 @@ if (args[0] === '--version') {
     assert.match(packNote, /ProofRoute publish support note/);
     assert.match(packNote, /\nBlockers\n/);
     assert.doesNotMatch(packNote, /PUBLISH READINESS|\x1b\[/);
-    const packSupportNote = spawnSync(process.execPath, ['./bin/proofroute.js', 'publish', '--npm', npmPath, '--support-note', '--support-pack', join(dir, 'support-pack-note')], {
-      cwd: new URL('..', import.meta.url),
+    const packSupportNote = spawnSync(process.execPath, [proofrouteBin, 'publish', '--npm', npmPath, '--support-note', '--support-pack', join(dir, 'support-pack-note')], {
+      cwd: cleanCwd,
       encoding: 'utf8'
     });
     assert.equal(packSupportNote.status, 1);
     assert.match(packSupportNote.stdout, /ProofRoute publish support note/);
     assert.ok(existsSync(join(dir, 'support-pack-note', 'manifest.json')));
-    const missingDir = spawnSync(process.execPath, ['./bin/proofroute.js', 'publish', '--npm', npmPath, '--support-pack'], {
-      cwd: new URL('..', import.meta.url),
+    const missingDir = spawnSync(process.execPath, [proofrouteBin, 'publish', '--npm', npmPath, '--support-pack'], {
+      cwd: cleanCwd,
       encoding: 'utf8'
     });
     assert.equal(missingDir.status, 1);
@@ -379,7 +425,13 @@ if (args[0] === '--version') {
 
 test('publish readiness reports a missing npm CLI before package commands run', async () => {
   const report = await publishReadinessReport({
-    runner: async () => {
+    runner: async (command, args) => {
+      if (command === 'git' && args[0] === 'rev-parse' && args[1] === 'HEAD') {
+        return { stdout: `${currentTestSha}\n`, stderr: '' };
+      }
+      if (command === 'git' && args[0] === 'status' && args[1] === '--porcelain') {
+        return { stdout: '', stderr: '' };
+      }
       const error = new Error('spawn npm ENOENT');
       error.code = 'ENOENT';
       throw error;
@@ -392,6 +444,7 @@ test('publish readiness reports a missing npm CLI before package commands run', 
   assert.equal(report.npm.auth.skipped, true);
   assert.equal(report.npm.evidence.cli, 'fail');
   assert.equal(report.npm.evidence.pack, 'skipped');
+  assert.equal(report.source.summary.pass, true);
   assert.equal(report.summary.localEvidence, 'fail');
   assert.deepEqual(report.blockers.map((blocker) => blocker.id), ['npm_cli_missing']);
   assert.equal(report.nextActions[0].forBlocker, 'npm_cli_missing');
@@ -425,6 +478,8 @@ test('publish readiness turns npm package surface and dry-run failures into acti
 test('publish readiness redacts command output before JSON reports expose it', async () => {
   const report = await publishReadinessReport({
     runner: async (command, args) => {
+      if (command === 'git' && args[0] === 'rev-parse' && args[1] === 'HEAD') return { stdout: `${currentTestSha}\n`, stderr: '' };
+      if (command === 'git' && args[0] === 'status' && args[1] === '--porcelain') return { stdout: '', stderr: '' };
       if (command === 'npm' && args[0] === '--version') return { stdout: '11.16.0\n', stderr: '' };
       if (command === 'npm' && args[0] === 'pack') return { stdout: `${JSON.stringify([fakePackReport()])}\n`, stderr: '' };
       if (command === 'npm' && args[0] === 'publish') return { stdout: '+ proofroute@0.1.0\n', stderr: '' };
@@ -442,10 +497,38 @@ test('publish readiness redacts command output before JSON reports expose it', a
   assert.doesNotMatch(encoded, /secret-token|user:pass|sk-secret-production-key|\/Users\/alice|Authorization: Bearer [^<]/);
 });
 
-function fakePublishRunner({ auth = true, actionsRuns = [], dispatchError, accountSearchError, accountSearchItems = [{ full_name: 'Lling0000/proofroute' }], packReport = fakePackReport(), publishStderr = 'npm notice Publishing to https://registry.npmjs.org/ with tag latest and public access (dry-run)\n', gitHead = currentTestSha } = {}) {
+async function initCleanGitCwd(dir) {
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, 'source.txt'), 'clean source\n', 'utf8');
+  runTestGit(['init'], dir);
+  runTestGit(['add', '.'], dir);
+  runTestGit(['-c', 'user.email=proofroute@example.com', '-c', 'user.name=ProofRoute Test', 'commit', '-m', 'init'], dir);
+}
+
+function runTestGit(args, cwd) {
+  const result = spawnSync('git', args, { cwd, encoding: 'utf8' });
+  assert.equal(result.status, 0, `git ${args.join(' ')} failed: ${result.stderr || result.stdout}`);
+}
+
+function fakePublishRunner({ auth = true, actionsRuns = [], dispatchError, accountSearchError, accountSearchItems = [{ full_name: 'Lling0000/proofroute' }], packReport = fakePackReport(), publishStderr = 'npm notice Publishing to https://registry.npmjs.org/ with tag latest and public access (dry-run)\n', gitHead = currentTestSha, gitStatus = '', gitHeadError, gitStatusError } = {}) {
   return async (command, args) => {
     if (command === 'git' && args[0] === 'rev-parse' && args[1] === 'HEAD') {
+      if (gitHeadError) {
+        const error = new Error(gitHeadError);
+        error.code = 1;
+        error.stderr = gitHeadError;
+        throw error;
+      }
       return { stdout: `${gitHead}\n`, stderr: '' };
+    }
+    if (command === 'git' && args[0] === 'status' && args[1] === '--porcelain') {
+      if (gitStatusError) {
+        const error = new Error(gitStatusError);
+        error.code = 1;
+        error.stderr = gitStatusError;
+        throw error;
+      }
+      return { stdout: gitStatus, stderr: '' };
     }
     if (command === 'npm' && args[0] === '--version') {
       return { stdout: '11.16.0\n', stderr: '' };

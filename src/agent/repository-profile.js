@@ -61,7 +61,7 @@ const readmeBadges = Object.freeze([
     id: 'proxy',
     alt: 'Proxy',
     image: 'https://img.shields.io/badge/OpenAI-compatible%20proxy-111827',
-    target: '#proofroute'
+    target: '#openai-proxy'
   }),
   Object.freeze({
     id: 'architecture',
@@ -78,6 +78,11 @@ const social = {
   badges: readmeBadges,
   shortPitch: 'ProofRoute is a zero-dependency OpenAI-compatible proxy that routes every coding-agent prompt to the cheapest fast-enough local or cloud model, then prints a terminal receipt with p95 router latency, speed lift, and exact savings without logging prompt text.',
   vibePitch: 'Point your coding agent at one local OpenAI-compatible endpoint, let ProofRoute pick the right model before you notice the choice, and keep a prompt-free receipt of what got faster and cheaper.'
+};
+
+const binaryRoles = {
+  proofroute: 'main router CLI',
+  'proofroute-classifier': 'reference classifier sidecar'
 };
 
 const commands = {
@@ -126,6 +131,7 @@ export async function repositoryProfileReport({ packagePath = new URL('../../pac
       name: pkg.name,
       version: pkg.version,
       description: pkg.description,
+      binaries: packageBinaries(pkg),
       keywords: npmKeywords,
       keywordLine: npmKeywords.join(', '),
       homepage,
@@ -135,6 +141,14 @@ export async function repositoryProfileReport({ packagePath = new URL('../../pac
     commands,
     privacy: 'Repository copy should keep the proof loop prompt-free: publish routing receipts, classifier evidence, device metadata, repaired ledger artifacts, and aggregate savings without shipping prompt text, completion text, credentials, private provider endpoints, or the original ledger when repair was required.'
   };
+}
+
+function packageBinaries(pkg) {
+  return Object.entries(pkg.bin ?? {}).map(([name, path]) => ({
+    name,
+    path,
+    role: binaryRoles[name] ?? 'package binary'
+  }));
 }
 
 export function desiredGithubRepositoryState(profile) {
