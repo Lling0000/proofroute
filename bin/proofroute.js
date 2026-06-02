@@ -8,7 +8,7 @@ import { trainIntentModelFiles } from '../src/agent/intent-training.js';
 import { AgentRuntime } from '../src/agent/runtime.js';
 import { classifierMetricsReport, doctorReport } from '../src/agent/doctor.js';
 import { launchReadinessReport } from '../src/agent/launch-readiness.js';
-import { privacyReport } from '../src/agent/privacy.js';
+import { privacyRepairReport, privacyReport } from '../src/agent/privacy.js';
 import { parseNonNegativeNumber, startProxy } from '../src/agent/proxy.js';
 import { publishReadinessReport, writePublishSupportPack } from '../src/agent/publish-readiness.js';
 import { releasePreflightReport, releaseProofPack } from '../src/agent/release-pack.js';
@@ -19,7 +19,7 @@ import { exportTunedConfig, tuneFromEvents } from '../src/agent/tuner.js';
 import { demoCatalog, mergeConfig, readConfig } from '../src/config.js';
 import { ExternalClassifier } from '../src/controller/gpu-classifier.js';
 import { RouteController } from '../src/controller/route-controller.js';
-import { renderAgentExecution, renderAgentPlan, renderCalibration, renderClassifierBenchmark, renderClassifierEvidenceVerification, renderClassifierMetrics, renderClassifierSvg, renderConnect, renderConnectShell, renderDecision, renderDashboard, renderDoctor, renderGithubRepositoryState, renderHelp, renderIntentTraining, renderJson, renderLaunchDemo, renderLaunchReadiness, renderModelCatalog, renderPrivacy, renderProofGate, renderPublicRepositoryFace, renderPublishReadiness, renderPublishSupportNote, renderReleasePreflight, renderReleaseProofPack, renderRepositoryProfile, renderRouteTrace, renderShare, renderShareMarkdown, renderShareSvg, renderSmoke, renderStats, renderTune } from '../src/view/terminal.js';
+import { renderAgentExecution, renderAgentPlan, renderCalibration, renderClassifierBenchmark, renderClassifierEvidenceVerification, renderClassifierMetrics, renderClassifierSvg, renderConnect, renderConnectShell, renderDecision, renderDashboard, renderDoctor, renderGithubRepositoryState, renderHelp, renderIntentTraining, renderJson, renderLaunchDemo, renderLaunchReadiness, renderModelCatalog, renderPrivacy, renderPrivacyRepair, renderProofGate, renderPublicRepositoryFace, renderPublishReadiness, renderPublishSupportNote, renderReleasePreflight, renderReleaseProofPack, renderRepositoryProfile, renderRouteTrace, renderShare, renderShareMarkdown, renderShareSvg, renderSmoke, renderStats, renderTune } from '../src/view/terminal.js';
 
 const command = process.argv[2] ?? 'help';
 const args = parseArgs(process.argv.slice(3));
@@ -257,8 +257,15 @@ try {
     }
   } else if (command === 'privacy' || command === 'audit') {
     const config = await loadRuntimeConfig(args);
-    const report = await privacyReport(telemetryPath(config, args.file ?? args.telemetry));
+    const path = telemetryPath(config, args.file ?? args.telemetry);
+    const report = await privacyReport(path);
     console.log(args.json ? renderJson(report) : renderPrivacy(report));
+    if (report.status === 'fail') process.exitCode = 1;
+  } else if (command === 'repair') {
+    const config = await loadRuntimeConfig(args);
+    const path = telemetryPath(config, args.file ?? args.telemetry);
+    const report = await privacyRepairReport({ path, out: args.out, config, force: Boolean(args.force) });
+    console.log(args.json ? renderJson(report) : renderPrivacyRepair(report));
     if (report.status === 'fail') process.exitCode = 1;
   } else if (command === 'classifier' || command === 'accelerator') {
     if (args['verify-evidence'] || args.verifyEvidence) {

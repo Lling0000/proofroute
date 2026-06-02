@@ -7,7 +7,11 @@ export function telemetryPath(config, override) {
 
 export async function recordRouteEvent(path, event) {
   await mkdir(dirname(path), { recursive: true });
-  await appendFile(path, `${JSON.stringify(sanitizeEvent(event))}\n`, 'utf8');
+  await appendFile(path, `${JSON.stringify(sanitizeTelemetryEvent(event))}\n`, 'utf8');
+}
+
+export function sanitizeTelemetryEvent(event) {
+  return sanitizeEvent(event);
 }
 
 export async function readRouteEvents(path) {

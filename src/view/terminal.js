@@ -73,6 +73,7 @@ export function renderHelp() {
     '  proofroute stats --watch --since 1h',
     '  proofroute privacy',
     '  proofroute privacy --file .proofroute/events.jsonl --json',
+    '  proofroute repair --file .proofroute/events.jsonl --out .proofroute/events.repaired.jsonl',
     '  proofroute classifier',
     '  proofroute classifier --warmup',
     '  proofroute classifier --bench --runs 5',
@@ -115,6 +116,7 @@ export function renderHelp() {
     '  fanout  Execute the asynchronous multi-agent plan through configured providers.',
     '  stats   Render or live-watch local privacy-preserving routing telemetry as terminal proof.',
     '  privacy Audit the local telemetry ledger for prompt, completion, request, response, or credential fields.',
+    '  repair  Write a prompt-free repaired ledger artifact from valid route evidence while dropping malformed or unsafe records.',
     '  classifier Render classifier sidecar lane metrics or run a local classifier benchmark proof.',
   '  doctor  Check local runtime, providers, telemetry, classifier, and policy readiness.',
     '  tune    Recommend a routing policy patch from the local telemetry ledger.',
@@ -1052,6 +1054,40 @@ export function renderPrivacy(report) {
     `${pad('ledger exists', 16)} ${report.exists ? 'yes' : 'no'}`,
     `${pad('allowed keys', 16)} ${allowed}`,
     ...issueBlock
+  ].join('\n');
+}
+
+export function renderPrivacyRepair(report) {
+  const passed = report.status === 'pass';
+  const mark = passed ? 'PASS' : 'FAIL';
+  const markColor = passed ? GREEN : MAGENTA;
+  const fieldState = report.forbiddenMatchCount === 0 ? `${GREEN}clean${RESET}` : `${YELLOW}sanitized${RESET}`;
+  const jsonState = report.parseErrorCount === 0 ? `${GREEN}clean${RESET}` : `${YELLOW}dropped${RESET}`;
+  const matchRows = (report.forbiddenMatches ?? []).slice(0, 8).map((match) => {
+    return `${YELLOW}field${RESET} ${pad(`line ${match.line}`, 10)} ${pad(match.key, 18)} ${match.path}`;
+  });
+  const parseRows = (report.parseErrors ?? []).slice(0, 8).map((error) => {
+    return `${YELLOW}jsonl${RESET} ${pad(`line ${error.line}`, 10)} ${error.message}`;
+  });
+  const repairBlock = matchRows.length || parseRows.length ? [
+    '',
+    `${BOLD}repair actions${RESET}`,
+    ...matchRows,
+    ...parseRows
+  ] : [];
+  return [
+    title('privacy repair'),
+    `${BOLD}${markColor}${mark}${RESET} ${DIM}${report.message}${RESET}`,
+    `${BOLD}${report.repairedEvents} repaired events${RESET} written to ${DIM}${report.outPath}${RESET} from ${DIM}${report.path}${RESET}.`,
+    '',
+    `${pad('input records', 16)} ${report.inputRecords}`,
+    `${pad('repaired', 16)} ${report.repairedEvents}`,
+    `${pad('dropped empty', 16)} ${report.droppedEmptyEvidence ?? 0}`,
+    `${pad('field repair', 16)} ${fieldState} ${report.forbiddenMatchCount} forbidden key matches`,
+    `${pad('jsonl repair', 16)} ${jsonState} ${report.parseErrorCount} malformed records`,
+    `${pad('output privacy', 16)} ${report.outputPrivacy?.status ?? 'unknown'}`,
+    `${pad('allowed keys', 16)} ${compactText((report.allowedEvidenceKeys ?? []).join(', '), 132)}`,
+    ...repairBlock
   ].join('\n');
 }
 

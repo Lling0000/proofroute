@@ -5,8 +5,8 @@ import { existsSync } from 'node:fs';
 import { appendFile, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { recordRouteEvent, readRouteEvents, recentRouteEvents, routeEventsInWindow, routeEvent, summarizeRouteEvents } from '../src/agent/telemetry.js';
-import { renderStats } from '../src/view/terminal.js';
+import { recordRouteEvent, readRouteEvents, readRouteEventsWithDiagnostics, recentRouteEvents, routeEventsInWindow, routeEvent, summarizeRouteEvents } from '../src/agent/telemetry.js';
+import { renderHelp, renderStats } from '../src/view/terminal.js';
 
 test('route telemetry records routing evidence without prompt text', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'proofroute-telemetry-'));
@@ -353,6 +353,138 @@ test('tune command refuses malformed ledger without writing an export file', asy
     assert.match(output, /proofroute privacy --file/);
     assert.doesNotMatch(output, /secret production prompt|sk-secret-production-key/);
     assert.equal(existsSync(exportPath), false);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('telemetry repair writes a prompt-free ledger that privacy prove share and tune accept', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'proofroute-repair-ledger-'));
+  const file = join(dir, 'events.jsonl');
+  const repairedPath = join(dir, 'events.repaired.jsonl');
+  const svgPath = join(dir, 'proof.svg');
+  const exportPath = join(dir, 'router.patch.json');
+  try {
+    await recordRouteEvent(file, routeEvent({
+      decision: fakeDecision(),
+      status: 200,
+      requestedModel: 'proofroute/local',
+      modelSwap: true,
+      routerDecisionMs: 0.31,
+      endToEndMs: 9,
+      stream: false
+    }));
+    await appendFile(file, `${JSON.stringify({
+      ...routeEvent({
+        decision: fakeDecision(),
+        status: 200,
+        requestedModel: 'proofroute/local',
+        modelSwap: true,
+        routerDecisionMs: 0.41,
+        endToEndMs: 11,
+        stream: false
+      }),
+      prompt: 'secret production prompt',
+      apiKey: 'sk-secret-production-key'
+    })}\n`, 'utf8');
+    await appendFile(file, '{"prompt":"secret production prompt","apiKey":"sk-secret-production-key"\n', 'utf8');
+    await appendFile(file, `${JSON.stringify({
+      model: 'secret production prompt',
+      routerLatencyMs: 1,
+      speedup: 1.2
+    })}\n`, 'utf8');
+    const repair = spawnSync(process.execPath, ['./bin/proofroute.js', 'repair', '--file', file, '--out', repairedPath, '--json'], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      timeout: 1000
+    });
+    const repairOutput = `${repair.stdout}\n${repair.stderr}`;
+    assert.equal(repair.status, 0, repair.stderr);
+    assert.equal(existsSync(repairedPath), true);
+    assert.doesNotMatch(repairOutput, /secret production prompt|sk-secret-production-key/);
+    const repairReport = JSON.parse(repair.stdout);
+    assert.equal(repairReport.status, 'pass');
+    assert.equal(repairReport.inputRecords, 4);
+    assert.equal(repairReport.repairedEvents, 2);
+    assert.equal(repairReport.parseErrorCount, 1);
+    assert.equal(repairReport.droppedEmptyEvidence, 1);
+    assert.equal(repairReport.forbiddenMatchCount, 2);
+    assert.equal(repairReport.outputPrivacy.status, 'pass');
+    const repairedRaw = await readFile(repairedPath, 'utf8');
+    const repairedLines = repairedRaw.trim().split(/\r?\n/);
+    assert.equal(repairedLines.length, 2);
+    assert.doesNotMatch(repairedRaw, /secret production prompt|sk-secret-production-key/);
+    assert.doesNotMatch(repairedRaw, /"prompt"|"apiKey"|"authorization"|"response"/);
+    const repairedEvents = await readRouteEvents(repairedPath);
+    assert.equal(repairedEvents.length, 2);
+    assert.equal(repairedEvents[0].model, 'llama3.2:3b');
+    assert.equal(repairedEvents[1].model, 'llama3.2:3b');
+    assert.equal(repairedEvents[1].policy, 'local');
+    const diagnostics = await readRouteEventsWithDiagnostics(repairedPath);
+    assert.equal(diagnostics.records, 2);
+    assert.equal(diagnostics.events.length, 2);
+    assert.equal(diagnostics.errors.length, 0);
+    const privacy = spawnSync(process.execPath, ['./bin/proofroute.js', 'privacy', '--file', repairedPath, '--json'], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      timeout: 1000
+    });
+    assert.equal(privacy.status, 0, privacy.stderr);
+    const privacyReport = JSON.parse(privacy.stdout);
+    assert.equal(privacyReport.status, 'pass');
+    assert.equal(privacyReport.forbiddenMatchCount, 0);
+    assert.equal(privacyReport.parseErrorCount, 0);
+    assert.doesNotMatch(privacy.stdout, /secret production prompt|sk-secret-production-key/);
+    const prove = spawnSync(process.execPath, ['./bin/proofroute.js', 'prove', '--file', repairedPath, '--min-requests', '2', '--min-savings-usd', '0', '--max-classifier-circuit-open', '2', '--json'], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      timeout: 1000
+    });
+    assert.equal(prove.status, 0, prove.stderr);
+    const proofReport = JSON.parse(prove.stdout);
+    assert.equal(proofReport.status, 'pass');
+    assert.equal(proofReport.aggregate.count, 2);
+    assert.equal(proofReport.ledger.errorCount, 0);
+    assert.equal(proofReport.checks.some((check) => check.id === 'ledger_parse'), false);
+    assert.doesNotMatch(prove.stdout, /secret production prompt|sk-secret-production-key/);
+    const share = spawnSync(process.execPath, ['./bin/proofroute.js', 'share', '--markdown', '--file', repairedPath], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      timeout: 1000
+    });
+    assert.equal(share.status, 0, share.stderr);
+    assert.match(share.stdout, /local telemetry ledger/);
+    assert.match(share.stdout, /routed 2 prompts/);
+    assert.doesNotMatch(share.stdout, /ledger parse guard/);
+    assert.doesNotMatch(share.stdout, /secret production prompt|sk-secret-production-key/);
+    const svg = spawnSync(process.execPath, ['./bin/proofroute.js', 'share', '--svg', '--file', repairedPath, '--out', svgPath], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      timeout: 1000
+    });
+    assert.equal(svg.status, 0, svg.stderr);
+    assert.equal(existsSync(svgPath), true);
+    const tune = spawnSync(process.execPath, ['./bin/proofroute.js', 'tune', '--file', repairedPath, '--export', exportPath, '--json'], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      timeout: 1000
+    });
+    assert.equal(tune.status, 0, tune.stderr);
+    const tuneReport = JSON.parse(tune.stdout);
+    assert.equal(tuneReport.summary.count, 2);
+    assert.equal(tuneReport.path, repairedPath);
+    assert.equal(existsSync(exportPath), true);
+    assert.doesNotMatch(tune.stdout, /secret production prompt|sk-secret-production-key/);
+    const exported = await readFile(exportPath, 'utf8');
+    assert.doesNotMatch(exported, /secret production prompt|sk-secret-production-key|"prompt"|"apiKey"/);
+    const overwrite = spawnSync(process.execPath, ['./bin/proofroute.js', 'repair', '--file', file, '--out', repairedPath], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      timeout: 1000
+    });
+    assert.equal(overwrite.status, 1);
+    assert.match(`${overwrite.stdout}\n${overwrite.stderr}`, /Refusing to overwrite/);
+    assert.match(renderHelp(), /proofroute repair/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
