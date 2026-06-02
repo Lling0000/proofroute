@@ -39,3 +39,36 @@ test('prose docs checker rejects list markers inside recursive targets', async (
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test('prose docs checker rejects markdown table rows outside code fences', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'proofroute-prose-table-fail-'));
+  try {
+    const file = join(directory, 'table.md');
+    await writeFile(file, 'This paragraph is fine.\n' + '| command | proof |\n' + '| --- | --- |\n');
+    const result = spawnSync(process.execPath, ['scripts/check-prose-docs.js', file], {
+      cwd: process.cwd(),
+      encoding: 'utf8'
+    });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /table\.md:2/);
+    assert.match(result.stderr, /paragraph prose rule rejected/);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('prose docs checker allows table-looking text inside code fences', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'proofroute-prose-code-pass-'));
+  try {
+    const file = join(directory, 'code.md');
+    await writeFile(file, 'A prose paragraph introduces a terminal capture.\n\n```text\n| command | proof |\n```\n');
+    const result = spawnSync(process.execPath, ['scripts/check-prose-docs.js', file], {
+      cwd: process.cwd(),
+      encoding: 'utf8'
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /prose check passed/);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

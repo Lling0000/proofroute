@@ -37,6 +37,7 @@ test('repository profile keeps public metadata executable and shareable', async 
   assert.equal(report.commands.linearEvidenceGate, 'npm run classifier:linear:sidecar, then npm run classifier:linear:evidence && npm run classifier:linear:verify');
   assert.equal(report.commands.hardwareDoctor, 'node ./bin/proofroute.js doctor --strict-hardware');
   assert.equal(report.commands.hardwareEvidenceVerify, 'node ./bin/proofroute.js classifier --verify-evidence classifier-evidence.json --require-hardware-probe --max-evidence-age-hours 24');
+  assert.equal(report.commands.repairLedger, 'node ./bin/proofroute.js repair --file .proofroute/events.jsonl --out .proofroute/events.repaired.jsonl');
   assert.equal(report.commands.launchReadiness, 'node ./bin/proofroute.js launch');
   assert.equal(report.commands.launchEvidenceGate, 'node ./bin/proofroute.js launch --require-evidence --evidence classifier-evidence.json --max-evidence-age-hours 24');
   const output = renderRepositoryProfile(report);
@@ -54,6 +55,7 @@ test('repository profile keeps public metadata executable and shareable', async 
   assert.match(output, /core launch/);
   assert.match(output, /launch ready/);
   assert.match(output, /proof gate/);
+  assert.match(output, /ledger repair/);
   assert.match(renderHelp(), /proofroute profile/);
 });
 
@@ -107,6 +109,7 @@ test('profile command emits machine-readable repository face metadata', () => {
   assert.equal(report.commands.linearEvidenceGate, 'npm run classifier:linear:sidecar, then npm run classifier:linear:evidence && npm run classifier:linear:verify');
   assert.equal(report.commands.hardwareDoctor, 'node ./bin/proofroute.js doctor --strict-hardware');
   assert.equal(report.commands.hardwareEvidenceVerify, 'node ./bin/proofroute.js classifier --verify-evidence classifier-evidence.json --require-hardware-probe --max-evidence-age-hours 24');
+  assert.equal(report.commands.repairLedger, 'node ./bin/proofroute.js repair --file .proofroute/events.jsonl --out .proofroute/events.repaired.jsonl');
   assert.equal(report.commands.launchReadiness, 'node ./bin/proofroute.js launch');
   assert.equal(report.commands.launchEvidenceGate, 'node ./bin/proofroute.js launch --require-evidence --evidence classifier-evidence.json --max-evidence-age-hours 24');
   assert.equal(report.commands.shareSvg, 'node ./bin/proofroute.js share --svg --out docs/proofroute-terminal.svg');

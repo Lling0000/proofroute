@@ -157,6 +157,7 @@ export function renderRepositoryProfile(report) {
     `${pad('strict launch', 16)} ${report.commands.launchEvidenceGate}`,
     `${pad('share card', 16)} ${report.commands.shareSvg}`,
     `${pad('privacy proof', 16)} ${report.commands.privacyProof}`,
+    `${pad('ledger repair', 16)} ${report.commands.repairLedger}`,
     `${pad('hardware doctor', 16)} ${report.commands.hardwareDoctor}`,
     `${pad('classifier card', 16)} ${report.commands.acceleratorSvg}`,
     `${pad('artifact gate', 16)} ${report.commands.artifactEvidenceGate}`,

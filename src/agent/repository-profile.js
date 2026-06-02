@@ -97,6 +97,7 @@ const commands = {
   publicReleasePreflight: 'node ./bin/proofroute.js release --preflight --core --check-public',
   shareSvg: 'node ./bin/proofroute.js share --svg --out docs/proofroute-terminal.svg',
   privacyProof: 'node ./bin/proofroute.js privacy --file .proofroute/events.jsonl',
+  repairLedger: 'node ./bin/proofroute.js repair --file .proofroute/events.jsonl --out .proofroute/events.repaired.jsonl',
   hardwareDoctor: 'node ./bin/proofroute.js doctor --strict-hardware',
   acceleratorSvg: 'node ./bin/proofroute.js classifier --warmup --svg --out docs/proofroute-classifier.svg',
   acceleratorBenchmarkSvg: 'node ./bin/proofroute.js classifier --bench --warmup --min-devices 2 --min-lanes 2 --require-device-profiles --svg --out docs/proofroute-classifier-benchmark.svg',
@@ -132,7 +133,7 @@ export async function repositoryProfileReport({ packagePath = new URL('../../pac
     },
     social,
     commands,
-    privacy: 'Repository copy should keep the proof loop prompt-free: publish routing receipts, classifier evidence, device metadata, and aggregate savings without shipping prompt text, completion text, credentials, or private provider endpoints.'
+    privacy: 'Repository copy should keep the proof loop prompt-free: publish routing receipts, classifier evidence, device metadata, repaired ledger artifacts, and aggregate savings without shipping prompt text, completion text, credentials, private provider endpoints, or the original ledger when repair was required.'
   };
 }
 

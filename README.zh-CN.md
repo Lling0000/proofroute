@@ -4,6 +4,8 @@
 
 [![Proof](https://img.shields.io/badge/local%20proof-zero--network-22c55e)](README.md#quick-start) [![GitHub](https://img.shields.io/badge/github-Lling0000%2Fproofroute-181717?logo=github)](https://github.com/Lling0000/proofroute) [![License](https://img.shields.io/badge/license-MIT-2ea44f)](LICENSE) [![Node](https://img.shields.io/badge/node-%3E%3D20-339933?logo=nodedotjs)](package.json) [![Dependencies](https://img.shields.io/badge/runtime%20dependencies-zero-0ea5e9)](package.json) [![Proxy](https://img.shields.io/badge/OpenAI-compatible%20proxy-111827)](#proofroute) [![Architecture](https://img.shields.io/badge/architecture-Agent--View--Controller-7c3aed)](docs/architecture.md)
 
+发布状态：在 `node ./bin/proofroute.js profile --check-public` 证明公开 GitHub 与 npm 可见之前，以本地 checkout 的直接 Node 命令为准。
+
 ProofRoute 是为 Vibe Coding 准备的隐形大模型路由器。它以 CLI-first 的方式作为 OpenAI 兼容透明代理运行，在开发工具真正调用模型之前，本地识别 prompt 意图，估算上下文和输出预算，然后把请求路由给成本更低、速度足够快、质量匹配当前任务的本地或云端模型，并在终端给出速度提升、资金节省和隐私边界的可复核证据。
 
 它解决的是开发者每天都会遇到的模型选择焦虑。你不需要在写代码时暂停下来比较模型，不需要打开另一个 dashboard，也不需要把 prompt 文本交给托管遥测服务。ProofRoute 把模型选择变成一次几乎不可见的本地决策，把价值证明变成一张可以截图、贴进 PR、放进 CI、写进发布说明的终端收据。
@@ -58,6 +60,8 @@ ProofRoute 的第一轮传播路径围绕终端 proof 展开。`node ./bin/proof
 
 代理运行后，`node ./bin/proofroute.js stats --since 1h`、`node ./bin/proofroute.js stats --watch --since 1h`、`node ./bin/proofroute.js privacy --file .proofroute/events.jsonl`、`node ./bin/proofroute.js share --ledger --since 1h --markdown`、`node ./bin/proofroute.js prove --ledger --since 1h --min-requests 20 --max-p95-ms 5 --max-router-overhead-pct 1 --max-classifier-circuit-open 0` 和 `node ./bin/proofroute.js tune --since 1h --export tuned-router.json` 会把当前 coding session 变成一个私有 proof loop。团队可以基于真实代理流量证明节省、速度、策略和隐私边界，而不需要导出 prompt 或 completion 文本。
 
+如果本地 ledger 出现 malformed 记录或不安全字段，`node ./bin/proofroute.js repair --file .proofroute/events.jsonl --out .proofroute/events.repaired.jsonl` 会写出一份新的 prompt-free artifact，而不会修改原始 ledger。repair 会丢弃 malformed 记录和无法重建为可信 route evidence 的记录，拒绝原地覆盖，把可用记录投影到允许的 routing evidence schema，并对模型名、策略名和类似字段做保守校验，避免敏感文本藏在允许字段里后进入可分享证明。把 repaired file 通过 `--file` 交给 `privacy`、ledger-backed `prove`、`share` 和 `tune` 后，一条坏 JSONL 不会终止 proof loop，但数据损失仍然会在终端中可见。
+
 ## OpenAI 兼容代理
 
 day-one 集成刻意紧凑。`node ./bin/proofroute.js connect --port 8787` 会打印 OpenAI 兼容 Base URL 和验证命令，`eval "$(node ./bin/proofroute.js connect --shell sh)"` 会把同样的环境变量注入当前 shell。如果第一个可执行模型已经在 LM Studio、vLLM 或其他本地 OpenAI 兼容网关后面，`node ./bin/proofroute.js connect --local-openai http://127.0.0.1:1234/v1 --local-openai-model qwen3` 会同时输出客户端需要的 OpenAI 变量和代理侧的 `PROOFROUTE_LOCAL_OPENAI_*` 变量，让第一条路由请求不依赖 `router.json`。
@@ -85,7 +89,7 @@ node ./bin/proofroute.js route --trace --prompt "Refactor this webhook, explain 
 
 ## 命令表面
 
-`demo` 是零网络第一印象。`share` 把同一份 proof 变成适合截图和 Markdown 的路由收据。`prove` 把延迟、节省、速度、请求量和准确率变成会失败的本地或 CI gate。`connect` 打印 drop-in proxy 连接卡片。`models` 渲染可执行模型目录、上下文窗口、价格、延迟和每类意图 leader。`smoke` 在无外部凭证的情况下用 fake provider 验证 runtime 或透明代理，而 `smoke --proxy --matrix` 会通过同一个本地 proxy origin 证明意图、上下文和成本约束能把请求路由到不同模型，同时不把 prompt 文本写进 headers 或 ledger。`stats` 把本地 ledger 渲染成终端 proof。`privacy` 扫描 ledger 是否出现 prompt、completion、raw request、raw response 或 credential-shaped 字段。`doctor` 检查 runtime、providers、telemetry 路径、classifier、sidecar 和 policy。`tune` 从本地 telemetry 推荐可审查的 routing-policy patch。`publish` 在 release copy 允许告诉别人安装前检查 package、npm、公开 GitHub、公开 npm、authenticated GitHub 和 Actions 表面。`proxy` 启动真正的 OpenAI 兼容透明代理。
+`demo` 是零网络第一印象。`share` 把同一份 proof 变成适合截图和 Markdown 的路由收据。`prove` 把延迟、节省、速度、请求量和准确率变成会失败的本地或 CI gate。`connect` 打印 drop-in proxy 连接卡片。`models` 渲染可执行模型目录、上下文窗口、价格、延迟和每类意图 leader。`smoke` 在无外部凭证的情况下用 fake provider 验证 runtime 或透明代理，而 `smoke --proxy --matrix` 会通过同一个本地 proxy origin 证明意图、上下文和成本约束能把请求路由到不同模型，同时不把 prompt 文本写进 headers 或 ledger。`stats` 把本地 ledger 渲染成终端 proof。`privacy` 扫描 ledger 是否出现 prompt、completion、raw request、raw response 或 credential-shaped 字段。`repair` 会在 malformed 记录阻塞证明、分享或调参，或者 forbidden fields 导致分享前的 privacy audit 失败时，写出一份单独的 prompt-free repaired ledger。`doctor` 检查 runtime、providers、telemetry 路径、classifier、sidecar 和 policy。`tune` 从本地 telemetry 推荐可审查的 routing-policy patch。`publish` 在 release copy 允许告诉别人安装前检查 package、npm、公开 GitHub、公开 npm、authenticated GitHub 和 Actions 表面。`proxy` 启动真正的 OpenAI 兼容透明代理。
 
 发布门禁输出的是证据而不是安慰。`node ./bin/proofroute.js publish --check-public --check-actions` 或 `npm run publish:preflight` 会产出机器可读的 `blockers`、`nextActions`、`npm.evidence` 和 `summary.localEvidence`，让 npm CLI 版本、npm pack dry-run 覆盖、npm 登录缺失、GitHub 账号可见性限制、匿名 404 和 Actions 禁用都变成明确发布清单，而不是一个含糊的红色终端。`--probe-actions-dispatch` 会主动触发 workflow dispatch 来证明账号层 Actions 限制，`--support-note` 会把同一份证据渲染成可复制给外部支持或 release log 的脱敏纯文本，`--support-pack proofroute-publish-support-pack` 会把 `status.json`、完整 JSON 报告、support note、next-action prose 和 redaction policy 写成一个小型脱敏附件目录，同时不会把失败门禁改写成成功，而 `--json` 始终优先保留自动化需要的 JSON 输出。
 
@@ -100,6 +104,8 @@ node ./bin/proofroute.js init > router.json
 从 LM Studio、vLLM 或其他本地 OpenAI 兼容服务开始时，`node ./bin/proofroute.js init --preset local-openai > router.json` 会生成与 `examples/local-openai-router.json` 一致的可执行本地网关形态，包括 `requiresApiKey: false`、本地策略偏置和 command-backed classifier 示例。环境变量 `PROOFROUTE_LOCAL_OPENAI_BASE_URL` 可以在不写 JSON 的情况下追加一个零价格本地 OpenAI 兼容模型，`PROOFROUTE_LOCAL_OPENAI_MODEL`、`PROOFROUTE_LOCAL_OPENAI_CONTEXT_WINDOW`、`PROOFROUTE_LOCAL_OPENAI_LATENCY_MS` 和 `PROOFROUTE_LOCAL_OPENAI_TOKENS_PER_SECOND` 可以让生成模型贴近真实网关。
 
 ProofRoute 默认把隐私边界放在本地。路由缓存使用 prompt fingerprint，不把 prompt 文本落盘；代理默认写入 `.proofroute/events.jsonl`，其中保存的是时间戳、请求模型、最终模型、模型替换状态、provider、本地性、策略、意图、classifier backend、confidence、token 估算、上下文窗口、上下文占用、runner-up 模型、baseline 模型、候选数量、被过滤数量、过滤原因、成本估算、baseline 成本、节省、速度提升、baseline 延迟、决策延迟、router overhead、端到端延迟、streaming 模式和状态码。非 streaming 上游返回 usage metadata 时，ledger 还可以记录实际 input tokens、output tokens、total tokens、实际路由成本、baseline 成本和实际节省，但不会保存 prompt 或 completion 文本。
+
+repair 比 privacy audit 更保守。audit 会在发现 forbidden keys 或 malformed JSONL 时失败，而 repair 会写出新的 JSONL 文件，只保留可信的顶层 route evidence，按当前 catalog 和已知 routing 词汇校验模型、provider、policy、intent 与 classifier backend 一类字段，丢弃缺少最小路由证据的记录，并且只报告被丢弃数据的数量和行号。这样 repaired artifact 可以用于本地 proof 恢复，但不会伪装成原始 telemetry 的无损副本。
 
 ## Classifier 加速
 
