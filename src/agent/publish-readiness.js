@@ -179,7 +179,7 @@ function packageMetadataCheck(pkg) {
     id: 'package_metadata',
     label: 'package metadata',
     pass,
-    detail: pass ? `${pkg.name}@${pkg.version} is public, has CLI bins, and ships both README surfaces.` : `metadata incomplete: private ${pkg.private === true}, public access ${hasPublicAccess}, missing bins ${missingBin.join(', ') || 'none'}, README ${hasReadme}, zh README ${hasChineseReadme}.`
+    detail: pass ? `${pkg.name}@${pkg.version} is configured for public npm access, has CLI bins, and ships both README surfaces.` : `metadata incomplete: private ${pkg.private === true}, public access ${hasPublicAccess}, missing bins ${missingBin.join(', ') || 'none'}, README ${hasReadme}, zh README ${hasChineseReadme}.`
   });
 }
 
@@ -406,7 +406,7 @@ function publishBlockers({ npm, account, publicFace, actions, repository, npmCom
       evidence: {
         checkId: 'package_metadata'
       },
-      nextAction: 'Update package.json so the package is public, has both CLI bins, ships both README surfaces, and uses publishConfig access public, then rerun proofroute publish.',
+      nextAction: 'Update package.json so the package is configured for public npm access, has both CLI bins, ships both README surfaces, and uses publishConfig access public, then rerun proofroute publish.',
       command: 'node ./bin/proofroute.js publish --json',
       scope: 'local',
       localFixable: true,

@@ -21,6 +21,8 @@ test('publish readiness passes when package, npm, auth, and Actions evidence are
   assert.equal(report.npm.pack.pass, true);
   assert.equal(report.npm.publishDryRun.pass, true);
   assert.equal(report.npm.auth.pass, true);
+  assert.match(report.npm.metadata.detail, /configured for public npm access/);
+  assert.doesNotMatch(report.npm.metadata.detail, /is public, has CLI bins/);
   assert.equal(report.npm.evidence.version, '11.16.0');
   assert.equal(report.npm.evidence.pack, 'pass');
   assert.equal(report.npm.evidence.requiredFilesMissing, 0);
